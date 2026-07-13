@@ -69,3 +69,4 @@ coverage/
 .playwright_mcp/
 .playwright-mcp/
 __pycache__/
+docker-dist/

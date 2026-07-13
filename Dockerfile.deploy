@@ -1,0 +1,26 @@
+# fleet-monitor deploy image: uses the PRE-BUILT client (client/dist, arch-independent)
+# so we skip the memory-hungry vite build — build this for linux/amd64 on a Mac
+# with `docker buildx build --platform linux/amd64` and run it on the VPS.
+# Runtime uses node's built-in node:sqlite (no native modules), so npm ci pulls
+# pure-JS deps only.
+#
+# Build:  cd client && npm run build   # produces client/dist
+#         docker buildx build --platform linux/amd64 -f Dockerfile.deploy \
+#           -t claude-fleet-ccam:latest --load .
+FROM node:22-alpine
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
+COPY server/ ./server/
+COPY scripts/ ./scripts/
+COPY statusline/ ./statusline/
+# client/dist is in .dockerignore (stock image builds it in-container); we ship
+# the pre-built dist via a staging copy the ignore file doesn't cover.
+COPY docker-dist ./client/dist/
+
+RUN mkdir -p data
+EXPOSE 4820
+ENV NODE_ENV=production
+CMD ["node", "server/index.js"]
