@@ -273,7 +273,9 @@ const processEvent = db.transaction((hookType, data) => {
   // name). Idempotent + on every event, so the label lands even if the first
   // event predates the reporter or the row already existed.
   if (typeof data.machine === "string" && data.machine) {
-    stmts.setSessionMachine.run(data.machine, sessionId, data.machine);
+    // eslint-disable-next-line no-control-regex
+    const machine = data.machine.replace(/[\u0000-\u001f]/g, "").slice(0, 64);
+    if (machine) stmts.setSessionMachine.run(machine, sessionId, machine);
   }
 
   // Remote household hooks (aideck-hook.js on other machines) cannot rely on

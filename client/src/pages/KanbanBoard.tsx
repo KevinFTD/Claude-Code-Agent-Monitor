@@ -174,6 +174,11 @@ export function KanbanBoard() {
         : agents,
     [agents, machineFilter, sessionsById]
   );
+  // Clear the filter if its machine drops out of the data, so it can't become a
+  // stuck "invisible filter" (empty board with no visible control to reset).
+  useEffect(() => {
+    if (machineFilter && !machines.includes(machineFilter)) setMachineFilter(null);
+  }, [machines, machineFilter]);
 
   // Bucket by effective status: agents with status "waiting" OR those with
   // awaiting_input_since set go into the "waiting" column. Other columns
