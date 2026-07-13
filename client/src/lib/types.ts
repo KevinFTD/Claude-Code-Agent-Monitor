@@ -60,6 +60,10 @@ export interface Session {
    * (permission prompt or "waiting for your input" notice). Cleared on the
    * next non-Notification hook event. Null when the session is not waiting. */
   awaiting_input_since?: string | null;
+  /** fleet-monitor: tailnet node name of the machine/container that reported
+   *  this session (from the reporter's `machine` field). Null for local
+   *  sessions or ones reported before the label was known. */
+  machine?: string | null;
 }
 
 /**

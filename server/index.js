@@ -62,6 +62,7 @@ const ccConfigRouter = require("./routes/cc-config");
 const runRouter = require("./routes/run");
 const alertsRouter = require("./routes/alerts");
 const webhooksRouter = require("./routes/webhooks");
+const transcriptIngestRouter = require("./routes/transcript-ingest"); // fleet-monitor add-on
 
 function createApp() {
   const app = express();
@@ -90,6 +91,7 @@ function createApp() {
   app.use("/api/run", runRouter);
   app.use("/api/alerts", alertsRouter);
   app.use("/api/webhooks", webhooksRouter);
+  app.use("/api/ingest", transcriptIngestRouter); // fleet-monitor: remote transcript upload (token-gated)
   app.get("/api/openapi.json", (_req, res) => {
     res.json(openApiSpec);
   });

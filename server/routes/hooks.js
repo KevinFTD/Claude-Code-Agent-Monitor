@@ -269,6 +269,13 @@ const processEvent = db.transaction((hookType, data) => {
 
   const session = ensureSession(sessionId, data);
 
+  // fleet-monitor: tag the session with the reporting machine (tailnet node
+  // name). Idempotent + on every event, so the label lands even if the first
+  // event predates the reporter or the row already existed.
+  if (typeof data.machine === "string" && data.machine) {
+    stmts.setSessionMachine.run(data.machine, sessionId, data.machine);
+  }
+
   // Remote household hooks (aideck-hook.js on other machines) cannot rely on
   // the transcript being readable on THIS host (the JSONL lives on the remote
   // machine's disk). They extract the transcript title locally and send it
@@ -1138,6 +1145,12 @@ function watchdogCheck() {
         const slug = sess.cwd.replace(/[\/\.]/g, "-");
         const candidate = path.join(os.homedir(), ".claude", "projects", slug, `${sess.id}.jsonl`);
         if (fs.existsSync(candidate)) tPath = candidate;
+      }
+      // fleet-monitor: remote sessions have no live transcript on this host —
+      // fall back to the uploaded snapshot so the watchdog can still surface
+      // renames / recover state for them.
+      if (!tPath) {
+        tPath = require("../lib/claude-home").getSnapshotTranscriptPath(sess.id);
       }
       if (!tPath) continue;
 

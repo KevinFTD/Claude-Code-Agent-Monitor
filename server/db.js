@@ -656,6 +656,15 @@ try {
   ).run();
 }
 
+// fleet-monitor: which machine/tailnet node a session runs on. Populated from
+// the `machine` field remote reporters attach to every hook event; NULL for
+// local sessions. Lets the kanban group/filter by host.
+try {
+  db.prepare("SELECT machine FROM sessions LIMIT 1").get();
+} catch {
+  db.prepare("ALTER TABLE sessions ADD COLUMN machine TEXT").run();
+}
+
 // Partial index for the periodic active-session sweep — covers only the
 // handful of rows the sweep actually reads.
 db.exec(
@@ -924,6 +933,12 @@ const stmts = {
   // of scanning events.
   setSessionTranscriptPath: db.prepare(
     "UPDATE sessions SET transcript_path = ? WHERE id = ? AND (transcript_path IS NULL OR transcript_path = '')"
+  ),
+  // fleet-monitor: idempotent — writes the machine label on any event that
+  // carries it (not just INSERT), so pre-existing rows and events that arrive
+  // before the label also get tagged.
+  setSessionMachine: db.prepare(
+    "UPDATE sessions SET machine = ? WHERE id = ? AND COALESCE(machine, '') != ?"
   ),
 
   getAgent: db.prepare("SELECT * FROM agents WHERE id = ?"),

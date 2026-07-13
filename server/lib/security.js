@@ -124,6 +124,17 @@ function extractToken(req) {
 //             loopback and carries no token); loopback bind already protects it.
 const TOKEN_EXEMPT_PREFIXES = ["/health", "/openapi.json", "/docs", "/hooks"];
 
+// fleet-monitor: on a central server that only receives remote reporter events
+// (which DO carry the token), set DASHBOARD_HOOKS_REQUIRE_TOKEN=1 to drop the
+// /hooks exemption and close the unauthenticated ingest surface. Default keeps
+// stock behavior (loopback hook handler posts without a token).
+function exemptPrefixes() {
+  if (/^(1|true|yes|on)$/i.test(process.env.DASHBOARD_HOOKS_REQUIRE_TOKEN || "")) {
+    return TOKEN_EXEMPT_PREFIXES.filter((p) => p !== "/hooks");
+  }
+  return TOKEN_EXEMPT_PREFIXES;
+}
+
 /**
  * Express middleware (mount at "/api"): when DASHBOARD_TOKEN is set, require a
  * matching bearer token on every API route except the exempt prefixes. A no-op
@@ -132,7 +143,7 @@ const TOKEN_EXEMPT_PREFIXES = ["/health", "/openapi.json", "/docs", "/hooks"];
 function tokenGuard(req, res, next) {
   const expected = getDashboardToken();
   if (!expected) return next();
-  if (TOKEN_EXEMPT_PREFIXES.some((p) => req.path === p || req.path.startsWith(p + "/"))) {
+  if (exemptPrefixes().some((p) => req.path === p || req.path.startsWith(p + "/"))) {
     return next();
   }
   if (tokensMatch(extractToken(req), expected)) return next();

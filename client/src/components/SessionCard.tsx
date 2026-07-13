@@ -8,7 +8,7 @@
  */
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { FolderOpen, Bot, Clock, Coins, Cpu } from "lucide-react";
+import { FolderOpen, Bot, Clock, Coins, Cpu, Server } from "lucide-react";
 import { SessionStatusBadge } from "./StatusBadge";
 import { effectiveSessionStatus, isSessionAwaitingInput } from "../lib/types";
 import type { Session } from "../lib/types";
@@ -75,6 +75,15 @@ export function SessionCard({ session, onClick }: SessionCardProps) {
       )}
 
       <div className="flex items-center gap-3 text-[11px] text-gray-500 min-w-0 overflow-hidden flex-wrap">
+        {session.machine && (
+          <span
+            className="flex items-center gap-1 flex-shrink-0 max-w-[40%] px-1.5 py-0.5 rounded bg-accent/15 text-accent"
+            title={session.machine}
+          >
+            <Server className="w-3 h-3 flex-shrink-0" />
+            <span className="truncate font-mono">{session.machine}</span>
+          </span>
+        )}
         <span className="flex items-center gap-1 flex-shrink-0">
           <Bot className="w-3 h-3" />
           {t("session.agentSummary", { count: agentCount })}

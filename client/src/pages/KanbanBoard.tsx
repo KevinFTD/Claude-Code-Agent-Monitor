@@ -10,7 +10,7 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
-import { RefreshCw, Columns3, ChevronDown, HelpCircle } from "lucide-react";
+import { RefreshCw, Columns3, ChevronDown, HelpCircle, Server } from "lucide-react";
 import { api } from "../lib/api";
 import { eventBus } from "../lib/eventBus";
 import { AgentCard } from "../components/AgentCard";
@@ -74,6 +74,8 @@ export function KanbanBoard() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Record<string, number>>({});
+  // fleet-monitor: filter the board to a single reporting machine (tailnet node).
+  const [machineFilter, setMachineFilter] = useState<string | null>(null);
 
   const setView = useCallback((next: BoardView) => {
     setViewState(next);
@@ -154,6 +156,25 @@ export function KanbanBoard() {
     return map;
   }, [sessions]);
 
+  // fleet-monitor: distinct machines present in the loaded sessions, and the
+  // machine-filtered views the board actually renders/counts.
+  const machines = useMemo(
+    () =>
+      Array.from(new Set(sessions.map((s) => s.machine).filter((m): m is string => !!m))).sort(),
+    [sessions]
+  );
+  const visibleSessions = useMemo(
+    () => (machineFilter ? sessions.filter((s) => s.machine === machineFilter) : sessions),
+    [sessions, machineFilter]
+  );
+  const visibleAgents = useMemo(
+    () =>
+      machineFilter
+        ? agents.filter((a) => sessionsById.get(a.session_id)?.machine === machineFilter)
+        : agents,
+    [agents, machineFilter, sessionsById]
+  );
+
   // Bucket by effective status: agents with status "waiting" OR those with
   // awaiting_input_since set go into the "waiting" column. Other columns
   // exclude agents that belong in "waiting".
@@ -163,8 +184,8 @@ export function KanbanBoard() {
     (acc, status) => {
       acc[status] =
         status === "waiting"
-          ? agents.filter(isEffectivelyWaiting)
-          : agents.filter((a) => a.status === status && !isEffectivelyWaiting(a));
+          ? visibleAgents.filter(isEffectivelyWaiting)
+          : visibleAgents.filter((a) => a.status === status && !isEffectivelyWaiting(a));
       return acc;
     },
     {} as Record<EffectiveAgentStatus, Agent[]>
@@ -174,18 +195,18 @@ export function KanbanBoard() {
     (acc, status) => {
       acc[status] =
         status === "waiting"
-          ? sessions.filter(isSessionAwaitingInput)
-          : sessions.filter((s) => s.status === status && !isSessionAwaitingInput(s));
+          ? visibleSessions.filter(isSessionAwaitingInput)
+          : visibleSessions.filter((s) => s.status === status && !isSessionAwaitingInput(s));
       return acc;
     },
     {} as Record<EffectiveSessionStatus, Session[]>
   );
 
-  const total = view === "agents" ? agents.length : sessions.length;
+  const total = view === "agents" ? visibleAgents.length : visibleSessions.length;
   const subtitle =
     view === "agents"
-      ? t("agentCount", { count: agents.length })
-      : t("sessionCount", { count: sessions.length });
+      ? t("agentCount", { count: visibleAgents.length })
+      : t("sessionCount", { count: visibleSessions.length });
 
   const wsConnected = useSyncExternalStore(eventBus.onConnection, () => eventBus.connected);
 
@@ -214,6 +235,9 @@ export function KanbanBoard() {
         </div>
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
+        {machines.length > 0 && (
+          <MachineFilter machines={machines} value={machineFilter} onChange={setMachineFilter} />
+        )}
         <ViewToggle view={view} onChange={setView} />
         <button onClick={load} className="btn-ghost flex-shrink-0">
           <RefreshCw className="w-4 h-4" /> {t("common:refresh")}
@@ -319,6 +343,43 @@ export function KanbanBoard() {
               );
             })}
       </div>
+    </div>
+  );
+}
+
+/**
+ * fleet-monitor: filter the board to one reporting machine (tailnet node).
+ * Only rendered when at least one machine label is present. Native select for
+ * a compact, accessible control that degrades gracefully.
+ */
+function MachineFilter({
+  machines,
+  value,
+  onChange,
+}: {
+  machines: string[];
+  value: string | null;
+  onChange: (next: string | null) => void;
+}) {
+  return (
+    <div className="relative flex items-center flex-shrink-0">
+      <Server className="w-3.5 h-3.5 text-gray-400 absolute left-2 pointer-events-none" />
+      <select
+        aria-label="Filter by machine"
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value || null)}
+        className={`appearance-none bg-surface-2 border rounded-lg pl-7 pr-7 py-1.5 text-xs max-w-[180px] truncate focus:outline-none focus:ring-1 focus:ring-accent hover:bg-surface-3 ${
+          value ? "border-accent/40 text-accent" : "border-border text-gray-300"
+        }`}
+      >
+        <option value="">All machines</option>
+        {machines.map((m) => (
+          <option key={m} value={m}>
+            {m}
+          </option>
+        ))}
+      </select>
+      <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2 pointer-events-none" />
     </div>
   );
 }
