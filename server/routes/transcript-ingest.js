@@ -22,6 +22,13 @@
  * misconfigured central server (no DASHBOARD_TOKEN => tokenGuard is a no-op and
  * the whole API is open on the bound interface), ingest additionally FAILS
  * CLOSED with 503 when no token is configured.
+ *
+ * Beyond durable replay, each write also extracts token usage from the snapshot
+ * and persists it (see extractSnapshotTokens), which is what gives remote/fleet
+ * sessions a non-zero cost — their hook events point at a transcript_path that
+ * only exists on the originating machine, so this uploaded copy is the sole
+ * source of `usage` records on the central host.
+ * @author Son Nguyen <hoangson091104@gmail.com>
  */
 "use strict";
 
@@ -32,8 +39,23 @@ const crypto = require("crypto");
 
 const { getTranscriptSnapshotDir } = require("../lib/claude-home");
 const { getDashboardToken } = require("../lib/security");
+const { stmts } = require("../db");
+const { broadcast } = require("../websocket");
+const TranscriptCache = require("../lib/transcript-cache");
 
 const router = express.Router();
+
+// Shared, path-keyed cache so token extraction over a session's snapshot is
+// INCREMENTAL across flushes (reads only the appended delta), mirroring how
+// hooks.js reuses one TranscriptCache for the live transcript. Fleet sessions'
+// hook events carry a `transcript_path` that lives on the REMOTE machine and is
+// unreadable here, so the hooks path never extracts tokens for them; the
+// uploaded snapshot below is the only copy of the transcript on this host, so
+// we extract usage from it right after each write. Without this, cost is always
+// 0 for remote sessions even though the transcript (with its `usage` records)
+// has arrived. Extraction is idempotent: replaceTokenUsage is a compaction-aware
+// UPSERT, so re-running over the same/regrown file never double-counts.
+const snapshotTokenCache = new TranscriptCache();
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const MAX_BODY_BYTES = 8 * 1024 * 1024; // one chunk (client caps at 4 MB) + margin
@@ -48,6 +70,54 @@ function normSid(raw) {
 
 function snapshotPath(sid) {
   return path.join(getTranscriptSnapshotDir(), `${sid}.jsonl`);
+}
+
+/**
+ * Parse token usage out of a session's freshly-written snapshot and persist it,
+ * so remote (fleet) sessions get non-zero cost. Best-effort and fully guarded:
+ * a snapshot write must never fail because token extraction did. No-ops when the
+ * session row doesn't exist yet (token_usage.session_id is a FK) — the next
+ * flush retries once the hook events have created the session. Returns true when
+ * at least one token bucket was written.
+ * @param {string} sid Lowercased session UUID.
+ * @param {string} p Absolute path to the snapshot JSONL on THIS host.
+ */
+function extractSnapshotTokens(sid, p) {
+  try {
+    if (!stmts.getSession.get(sid)) return false; // session not created yet
+    const result = snapshotTokenCache.extract(p);
+    if (!result || !result.tokensByModel) return false;
+    let wrote = false;
+    for (const tokens of Object.values(result.tokensByModel)) {
+      stmts.replaceTokenUsage.run(
+        sid,
+        tokens.model,
+        tokens.speed,
+        tokens.geo,
+        tokens.tier,
+        tokens.input,
+        tokens.output,
+        tokens.cacheRead,
+        tokens.cacheWrite,
+        tokens.cacheWrite1h,
+        tokens.webSearch,
+        tokens.webFetch,
+        tokens.codeExec
+      );
+      wrote = true;
+    }
+    if (wrote) {
+      // Nudge the UI to recompute cost. The session row itself carries no cost
+      // field (the sessions route derives it on read), so this just prompts a
+      // refresh; the new total lands on the next /api/sessions fetch.
+      const row = stmts.getSession.get(sid);
+      if (row) broadcast("session_updated", row);
+    }
+    return wrote;
+  } catch {
+    // Never let cost extraction break transcript ingestion.
+    return false;
+  }
 }
 
 function fileSize(p) {
@@ -169,6 +239,9 @@ router.post(
           error: { code: "EOFFSET", message: "offset mismatch", currentSize: result.current },
         });
       }
+      // Populate token usage / cost from the snapshot we just wrote (the only
+      // readable copy of a remote session's transcript on this host).
+      extractSnapshotTokens(sid, snapshotPath(sid));
       return res.json({ bytes: result.bytes, tail: result.tail });
     } catch (e) {
       return res.status(500).json({ error: { code: "EWRITE", message: e.message } });
