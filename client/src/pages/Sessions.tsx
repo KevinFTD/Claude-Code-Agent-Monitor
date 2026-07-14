@@ -4,7 +4,7 @@
  * @author Son Nguyen <hoangson091104@gmail.com>
  */
 
-import { useEffect, useState, useCallback, useSyncExternalStore } from "react";
+import { useEffect, useState, useCallback, useRef, useSyncExternalStore } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -154,7 +154,15 @@ export function Sessions() {
   // Pull active Run handles so we can mark which sessions are being driven
   // from /run right now. Refresh on mount, on run_status WS messages, and
   // every 15s as a safety net for stale browser state.
+  //
+  // The /run feature spawns processes on the SERVER host, so its routes are
+  // loopback-Origin-only. On a remote/fleet deployment (browser reaching the
+  // dashboard over a tailnet/domain) every call 403s — there are no
+  // dashboard-driven runs to mark. Stop polling after the first 403 so we don't
+  // spam the console every 15s; the feature is simply unavailable here.
+  const runUnavailableRef = useRef(false);
   const loadDashboardRuns = useCallback(() => {
+    if (runUnavailableRef.current) return;
     api.run
       .list()
       .then((r) => {
@@ -164,7 +172,9 @@ export function Sessions() {
         }
         setDashboardRunIds(ids);
       })
-      .catch(() => undefined);
+      .catch((err: Error & { status?: number }) => {
+        if (err?.status === 403) runUnavailableRef.current = true;
+      });
   }, []);
 
   useEffect(() => {

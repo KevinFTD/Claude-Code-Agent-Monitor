@@ -69,7 +69,11 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, { ...options, headers });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body?.error?.message || `HTTP ${res.status}`);
+    const err = new Error(body?.error?.message || `HTTP ${res.status}`);
+    // Expose the HTTP status so callers can react to specific failures (e.g.
+    // a loopback-only endpoint returning 403 to a remote browser).
+    (err as Error & { status?: number }).status = res.status;
+    throw err;
   }
   return res.json();
 }
