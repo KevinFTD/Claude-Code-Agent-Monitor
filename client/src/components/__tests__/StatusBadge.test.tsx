@@ -41,10 +41,14 @@ describe("AgentStatusBadge", () => {
     expect(dot).toBeInTheDocument();
   });
 
-  it("should apply pulse animation for waiting status by default", () => {
+  it("does not pulse an idle waiting badge (no reason)", () => {
     const { container } = render(<AgentStatusBadge status="waiting" />);
-    const dot = container.querySelector(".animate-pulse-dot");
-    expect(dot).toBeInTheDocument();
+    expect(container.querySelector(".animate-pulse-dot")).not.toBeInTheDocument();
+  });
+
+  it("pulses an action-required waiting badge", () => {
+    const { container } = render(<AgentStatusBadge status="waiting" reason="action" />);
+    expect(container.querySelector(".animate-pulse-dot")).toBeInTheDocument();
   });
 
   it("should respect explicit pulse=false override", () => {
@@ -59,12 +63,18 @@ describe("AgentStatusBadge", () => {
     expect(dot).toBeInTheDocument();
   });
 
-  it("should render waiting status with yellow dot and pulse by default", () => {
+  it("renders idle waiting as a quiet gray 'Waiting' badge", () => {
     const { container } = render(<AgentStatusBadge status="waiting" />);
     expect(screen.getByText("Waiting")).toBeInTheDocument();
-    const dot = container.querySelector(".animate-pulse-dot");
-    expect(dot).toBeInTheDocument();
-    expect(container.querySelector(".bg-yellow-400")).toBeInTheDocument();
+    expect(container.querySelector(".animate-pulse-dot")).not.toBeInTheDocument();
+    expect(container.querySelector(".bg-gray-400")).toBeInTheDocument();
+  });
+
+  it("renders action-required waiting as a red 'Needs You' badge with pulse", () => {
+    const { container } = render(<AgentStatusBadge status="waiting" reason="action" />);
+    expect(screen.getByText("Needs You")).toBeInTheDocument();
+    expect(container.querySelector(".animate-pulse-dot")).toBeInTheDocument();
+    expect(container.querySelector(".bg-red-400")).toBeInTheDocument();
   });
 });
 
@@ -89,11 +99,19 @@ describe("SessionStatusBadge", () => {
     expect(screen.getByText("Abandoned")).toBeInTheDocument();
   });
 
-  it("should render waiting status with pulsing yellow dot", () => {
+  it("renders idle waiting as a quiet gray 'Waiting' badge", () => {
     const { container } = render(<SessionStatusBadge status="waiting" />);
     expect(screen.getByText("Waiting")).toBeInTheDocument();
-    const dot = container.querySelector(".animate-pulse-dot");
-    expect(dot).toBeInTheDocument();
-    expect(container.querySelector(".bg-yellow-400")).toBeInTheDocument();
+    // Session badge omits the dot entirely when not pulsing (idle) — assert the
+    // muted badge color instead.
+    expect(container.querySelector(".animate-pulse-dot")).not.toBeInTheDocument();
+    expect(container.querySelector(".text-gray-400")).toBeInTheDocument();
+  });
+
+  it("renders action-required waiting as a red 'Needs You' badge with pulse", () => {
+    const { container } = render(<SessionStatusBadge status="waiting" reason="action" />);
+    expect(screen.getByText("Needs You")).toBeInTheDocument();
+    expect(container.querySelector(".animate-pulse-dot")).toBeInTheDocument();
+    expect(container.querySelector(".bg-red-400")).toBeInTheDocument();
   });
 });

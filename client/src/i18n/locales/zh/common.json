@@ -41,6 +41,7 @@
   "status": {
     "working": "工作中",
     "waiting": "等待中",
+    "needsAction": "需要操作",
     "completed": "已完成",
     "error": "错误",
     "active": "活跃",

@@ -41,6 +41,7 @@
   "status": {
     "working": "Đang xử lý",
     "waiting": "Đang chờ",
+    "needsAction": "Cần bạn",
     "completed": "Hoàn tất",
     "error": "Lỗi",
     "active": "Đang hoạt động",

@@ -60,6 +60,10 @@ export interface Session {
    * (permission prompt or "waiting for your input" notice). Cleared on the
    * next non-Notification hook event. Null when the session is not waiting. */
   awaiting_input_since?: string | null;
+  /** fleet-monitor: WHY it's awaiting — "action" (blocked on permission /
+   *  needs-input, act now) vs "idle" (turn ended, waiting but not blocking).
+   *  Null when not awaiting or reported before the field existed (treat as idle). */
+  awaiting_reason?: "action" | "idle" | null;
   /** fleet-monitor: tailnet node name of the machine/container that reported
    *  this session (from the reporter's `machine` field). Null for local
    *  sessions or ones reported before the label was known. */
@@ -104,6 +108,8 @@ export interface Agent {
   metadata: string | null;
   /** Mirrors the parent session: ISO timestamp when set, null otherwise. */
   awaiting_input_since?: string | null;
+  /** fleet-monitor: "action" | "idle" | null — see Session.awaiting_reason. */
+  awaiting_reason?: "action" | "idle" | null;
   /**
    * The agent's OWN cost (USD), computed server-side from its per-agent token
    * buckets. Present for subagents that carry usage in their metadata; 0/absent
@@ -132,6 +138,16 @@ export function isAgentAwaitingInput(agent: Agent | undefined | null): boolean {
   if (!agent?.awaiting_input_since) return false;
   // Once the agent's lifecycle has ended, the waiting flag is stale; ignore it.
   return agent.status !== "completed" && agent.status !== "error";
+}
+
+/** fleet-monitor: awaiting AND blocked on the user right now ("action" reason:
+ *  permission / needs-input), vs an idle turn-end wait. A null reason (legacy /
+ *  pre-migration rows) counts as idle, so we never over-alert. */
+export function isSessionActionRequired(session: Session | undefined | null): boolean {
+  return isSessionAwaitingInput(session) && session?.awaiting_reason === "action";
+}
+export function isAgentActionRequired(agent: Agent | undefined | null): boolean {
+  return isAgentAwaitingInput(agent) && agent?.awaiting_reason === "action";
 }
 
 /** Overlays {@link AWAITING_STATUS} on top of `agent.status` when the agent is

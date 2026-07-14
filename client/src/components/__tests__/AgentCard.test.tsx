@@ -235,11 +235,11 @@ describe("AgentCard", () => {
     expect(card?.className).toContain("border-l-2");
   });
 
-  it("should apply yellow border for waiting agents even without awaiting_input_since", () => {
+  it("applies a quiet gray border for idle-waiting agents (no reason)", () => {
     const { container } = renderCard(<AgentCard agent={makeAgent({ status: "waiting" })} />);
     const card = container.querySelector(".card-hover");
     expect(card?.className).toContain("border-l-2");
-    expect(card?.className).toContain("border-l-yellow-500/60");
+    expect(card?.className).toContain("border-l-gray-500/40");
   });
 
   it("should not apply active border for completed agents", () => {
@@ -255,7 +255,7 @@ describe("AgentCard", () => {
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
-  it("renders waiting badge and yellow accent when awaiting_input_since is set", () => {
+  it("renders idle-waiting with a gray accent when awaiting_input_since is set", () => {
     const { container } = renderCard(
       <AgentCard
         agent={makeAgent({
@@ -266,7 +266,22 @@ describe("AgentCard", () => {
     );
     expect(screen.getByText("Waiting")).toBeInTheDocument();
     const card = container.querySelector(".card-hover");
-    expect(card?.className).toContain("border-l-yellow-500/60");
+    expect(card?.className).toContain("border-l-gray-500/40");
+  });
+
+  it("renders action-required waiting with a red accent + 'Needs You'", () => {
+    const { container } = renderCard(
+      <AgentCard
+        agent={makeAgent({
+          status: "waiting",
+          awaiting_input_since: "2026-03-05T10:01:00.000Z",
+          awaiting_reason: "action",
+        })}
+      />
+    );
+    expect(screen.getByText("Needs You")).toBeInTheDocument();
+    const card = container.querySelector(".card-hover");
+    expect(card?.className).toContain("border-l-red-500/70");
   });
 
   it("ignores awaiting_input_since once the agent has completed", () => {

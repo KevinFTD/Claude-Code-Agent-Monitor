@@ -665,6 +665,20 @@ try {
   db.prepare("ALTER TABLE sessions ADD COLUMN machine TEXT").run();
 }
 
+// fleet-monitor: WHY a session/agent is awaiting input, so the "Waiting" column
+// can distinguish "blocked, needs you now" (permission / needs-input) from just
+// "turn ended, idle". 'action' | 'idle' | NULL (not awaiting, or legacy rows).
+try {
+  db.prepare("SELECT awaiting_reason FROM sessions LIMIT 1").get();
+} catch {
+  db.prepare("ALTER TABLE sessions ADD COLUMN awaiting_reason TEXT").run();
+}
+try {
+  db.prepare("SELECT awaiting_reason FROM agents LIMIT 1").get();
+} catch {
+  db.prepare("ALTER TABLE agents ADD COLUMN awaiting_reason TEXT").run();
+}
+
 // Partial index for the periodic active-session sweep — covers only the
 // handful of rows the sweep actually reads.
 db.exec(
@@ -972,16 +986,29 @@ const stmts = {
     "UPDATE sessions SET awaiting_input_since = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?"
   ),
   clearSessionAwaitingInput: db.prepare(
-    "UPDATE sessions SET awaiting_input_since = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ? AND awaiting_input_since IS NOT NULL"
+    "UPDATE sessions SET awaiting_input_since = NULL, awaiting_reason = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ? AND awaiting_input_since IS NOT NULL"
   ),
   setAgentAwaitingInput: db.prepare(
     "UPDATE agents SET awaiting_input_since = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?"
   ),
   clearAgentAwaitingInput: db.prepare(
-    "UPDATE agents SET awaiting_input_since = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ? AND awaiting_input_since IS NOT NULL"
+    "UPDATE agents SET awaiting_input_since = NULL, awaiting_reason = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ? AND awaiting_input_since IS NOT NULL"
   ),
   clearSessionAgentsAwaitingInput: db.prepare(
-    "UPDATE agents SET awaiting_input_since = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE session_id = ? AND awaiting_input_since IS NOT NULL"
+    "UPDATE agents SET awaiting_input_since = NULL, awaiting_reason = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE session_id = ? AND awaiting_input_since IS NOT NULL"
+  ),
+  // fleet-monitor: stamp awaiting + WHY, with a no-downgrade rule — 'action'
+  // (blocked, needs you now) never gets overwritten by a later 'idle'. Params:
+  // (ts, reason, reason, id). Clearing is handled by the clear* statements above.
+  setSessionAwaiting: db.prepare(
+    `UPDATE sessions SET awaiting_input_since = ?,
+       awaiting_reason = CASE WHEN ? = 'action' OR awaiting_reason = 'action' THEN 'action' ELSE ? END,
+       updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`
+  ),
+  setAgentAwaiting: db.prepare(
+    `UPDATE agents SET awaiting_input_since = ?,
+       awaiting_reason = CASE WHEN ? = 'action' OR awaiting_reason = 'action' THEN 'action' ELSE ? END,
+       updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`
   ),
   // Find the deepest currently-working subagent in a session using a recursive CTE.
   // Used to infer which agent is spawning a new subagent when hook events don't

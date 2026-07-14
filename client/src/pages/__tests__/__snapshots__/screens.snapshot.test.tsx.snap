@@ -217,10 +217,10 @@ exports[`screen snapshots > Activity feed 1`] = `
                 </dd>
                 <dt>
                   <span
-                    class="badge bg-yellow-500/10 border-yellow-500/20 text-yellow-400"
+                    class="badge bg-gray-500/10 text-gray-400"
                   >
                     <span
-                      class="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse-dot"
+                      class="w-1.5 h-1.5 rounded-full bg-gray-400 "
                     />
                     Waiting
                   </span>

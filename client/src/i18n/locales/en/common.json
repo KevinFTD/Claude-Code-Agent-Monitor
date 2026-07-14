@@ -41,6 +41,7 @@
   "status": {
     "working": "Working",
     "waiting": "Waiting",
+    "needsAction": "Needs You",
     "completed": "Completed",
     "error": "Error",
     "active": "Active",

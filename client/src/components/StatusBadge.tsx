@@ -7,48 +7,77 @@ import { useTranslation } from "react-i18next";
 import { STATUS_CONFIG, SESSION_STATUS_CONFIG } from "../lib/types";
 import type { EffectiveAgentStatus, EffectiveSessionStatus } from "../lib/types";
 
+// fleet-monitor: split the single "waiting" badge into two urgencies via the
+// awaiting_reason. "action" (blocked, needs you now) → red + pulse + a distinct
+// "Needs You" label; "idle" (turn-end wait) → muted gray, quiet. A null reason
+// (legacy rows) falls through to idle styling so we never over-alert.
+type AwaitReason = "action" | "idle" | null | undefined;
+function waitingStyle(reason: AwaitReason) {
+  if (reason === "action") {
+    return {
+      bg: "bg-red-500/15",
+      color: "text-red-400",
+      dot: "bg-red-400",
+      pulse: true,
+      labelKey: "common:status.needsAction",
+    };
+  }
+  return {
+    bg: "bg-gray-500/10",
+    color: "text-gray-400",
+    dot: "bg-gray-400",
+    pulse: false,
+    labelKey: "common:status.waiting",
+  };
+}
+
 interface AgentStatusBadgeProps {
   status: EffectiveAgentStatus;
+  reason?: AwaitReason;
   pulse?: boolean;
 }
 
-export function AgentStatusBadge({ status, pulse }: AgentStatusBadgeProps) {
+export function AgentStatusBadge({ status, reason, pulse }: AgentStatusBadgeProps) {
   const { t } = useTranslation();
-  const config = STATUS_CONFIG[status];
-  // "waiting" pulses by default so the user's eye is drawn to sessions that
-  // need their attention, matching the pulsing for active/working states.
-  const shouldPulse = pulse ?? (status === "working" || status === "waiting");
+  const base = STATUS_CONFIG[status];
+  const w = status === "waiting" ? waitingStyle(reason) : null;
+  const bg = w ? w.bg : base.bg;
+  const color = w ? w.color : base.color;
+  const dot = w ? w.dot : base.dot;
+  const labelKey = w ? w.labelKey : base.labelKey;
+  const shouldPulse = pulse ?? (status === "working" || (w ? w.pulse : false));
 
   return (
-    <span className={`badge ${config.bg} ${config.color}`}>
+    <span className={`badge ${bg} ${color}`}>
       <span
-        className={`w-1.5 h-1.5 rounded-full ${config.dot} ${
-          shouldPulse ? "animate-pulse-dot" : ""
-        }`}
+        className={`w-1.5 h-1.5 rounded-full ${dot} ${shouldPulse ? "animate-pulse-dot" : ""}`}
       />
-      {t(config.labelKey)}
+      {t(labelKey)}
     </span>
   );
 }
 
 interface SessionStatusBadgeProps {
   status: EffectiveSessionStatus;
+  reason?: AwaitReason;
   pulse?: boolean;
 }
 
-export function SessionStatusBadge({ status, pulse }: SessionStatusBadgeProps) {
+export function SessionStatusBadge({ status, reason, pulse }: SessionStatusBadgeProps) {
   const { t } = useTranslation();
-  const config = SESSION_STATUS_CONFIG[status];
-  const shouldPulse = pulse ?? status === "waiting";
+  const base = SESSION_STATUS_CONFIG[status];
+  const w = status === "waiting" ? waitingStyle(reason) : null;
+  const bg = w ? w.bg : base.bg;
+  const color = w ? w.color : base.color;
+  const dot = w ? w.dot : base.dot;
+  const labelKey = w ? w.labelKey : base.labelKey;
+  const shouldPulse = pulse ?? (w ? w.pulse : false);
   return (
-    <span className={`badge ${config.bg} ${config.color}`}>
+    <span className={`badge ${bg} ${color}`}>
       {shouldPulse && (
-        <span
-          className={`w-1.5 h-1.5 rounded-full ${config.dot} animate-pulse-dot`}
-          aria-hidden="true"
-        />
+        <span className={`w-1.5 h-1.5 rounded-full ${dot} animate-pulse-dot`} aria-hidden="true" />
       )}
-      {t(config.labelKey)}
+      {t(labelKey)}
     </span>
   );
 }

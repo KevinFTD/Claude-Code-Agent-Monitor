@@ -22,6 +22,8 @@ import {
   SESSION_STATUS_CONFIG,
   isAgentAwaitingInput,
   isSessionAwaitingInput,
+  isAgentActionRequired,
+  isSessionActionRequired,
 } from "../lib/types";
 import type {
   Agent,
@@ -189,7 +191,10 @@ export function KanbanBoard() {
     (acc, status) => {
       acc[status] =
         status === "waiting"
-          ? visibleAgents.filter(isEffectivelyWaiting)
+          ? visibleAgents
+              .filter(isEffectivelyWaiting)
+              // fleet-monitor: action-required (blocked, needs you) first.
+              .sort((a, b) => Number(isAgentActionRequired(b)) - Number(isAgentActionRequired(a)))
           : visibleAgents.filter((a) => a.status === status && !isEffectivelyWaiting(a));
       return acc;
     },
@@ -200,7 +205,12 @@ export function KanbanBoard() {
     (acc, status) => {
       acc[status] =
         status === "waiting"
-          ? visibleSessions.filter(isSessionAwaitingInput)
+          ? visibleSessions
+              .filter(isSessionAwaitingInput)
+              // fleet-monitor: action-required (blocked, needs you) first.
+              .sort(
+                (a, b) => Number(isSessionActionRequired(b)) - Number(isSessionActionRequired(a))
+              )
           : visibleSessions.filter((s) => s.status === status && !isSessionAwaitingInput(s));
       return acc;
     },

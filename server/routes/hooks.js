@@ -41,6 +41,37 @@ function isWaitingForUserMessage(msg) {
   return WAITING_INPUT_PATTERN.test(msg);
 }
 
+// fleet-monitor: classify a Notification's urgency. Prefer Claude Code's
+// notification_type (idle_prompt / permission_prompt / agent_needs_input);
+// fall back to the message-text heuristic only when the field is absent (older
+// CC). Returns "action" (blocked, needs the user now) | "idle" (turn ended,
+// waiting but not blocking) | null (not a waiting notification, e.g.
+// auth_success — don't stamp awaiting).
+function awaitingReasonFor(notificationType, msg) {
+  switch (notificationType) {
+    case "permission_prompt":
+    case "agent_needs_input":
+      return "action";
+    case "idle_prompt":
+      return "idle";
+  }
+  // A known-but-non-waiting type (string present, not matched above) → not waiting.
+  if (typeof notificationType === "string" && notificationType) return null;
+  // No notification_type (legacy): fall back to the message text.
+  if (isWaitingForUserMessage(msg)) return /permission|approval/i.test(msg) ? "action" : "idle";
+  return null;
+}
+
+// fleet-monitor: stamp awaiting_input + WHY on session + main agent.
+//   reason "action" = blocked, needs the user now (permission / needs-input)
+//   reason "idle"   = turn ended / idle, waiting but not blocking
+// Uses the no-downgrade statements so a later "idle" can't mask a pending
+// "action" (important given events can arrive out of order from remote hosts).
+function setAwaiting(sessionId, mainAgentId, ts, reason) {
+  stmts.setSessionAwaiting.run(ts, reason, reason, sessionId);
+  if (mainAgentId) stmts.setAgentAwaiting.run(ts, reason, reason, mainAgentId);
+}
+
 function clearAwaitingInput(sessionId, mainAgentId, broadcastUpdates) {
   // Clear waiting flag on the main agent and any other agents on this session
   // (subagents don't normally enter waiting state, but keep them in sync just
@@ -68,8 +99,7 @@ function recoverInterruptedSession(sessionId, fullSess, mainAgentId, reasonSuffi
   if (mainAgentId) {
     stmts.updateAgent.run(null, "waiting", null, null, null, null, mainAgentId);
   }
-  stmts.setSessionAwaitingInput.run(ts, sessionId);
-  if (mainAgentId) stmts.setAgentAwaitingInput.run(ts, mainAgentId);
+  setAwaiting(sessionId, mainAgentId, ts, "idle"); // user interrupt = idle, not blocked
 
   const label = fullSess?.name || `Session ${sessionId.slice(0, 8)}`;
   const summary = reasonSuffix ? `${label} - ${reasonSuffix}` : `${label} - interrupted by user`;
@@ -483,8 +513,7 @@ const processEvent = db.transaction((hookType, data) => {
         // Stamp the waiting flag in the same DB pass as the status update so
         // the post-write read returns a consistent (waiting, awaiting=set)
         // row.
-        stmts.setSessionAwaitingInput.run(now, sessionId);
-        if (mainAgentId) stmts.setAgentAwaitingInput.run(now, mainAgentId);
+        setAwaiting(sessionId, mainAgentId, now, "idle"); // Stop = turn ended, idle
       }
 
       // Now broadcast — single agent_updated reflecting the final state.
@@ -569,8 +598,7 @@ const processEvent = db.transaction((hookType, data) => {
       // user hits enter) or PreToolUse (when Claude actually runs a tool)
       // will clear the flag.
       const sessionStartTs = new Date().toISOString();
-      stmts.setSessionAwaitingInput.run(sessionStartTs, sessionId);
-      if (mainAgentId) stmts.setAgentAwaitingInput.run(sessionStartTs, mainAgentId);
+      setAwaiting(sessionId, mainAgentId, sessionStartTs, "idle"); // resumed-but-idle
 
       // Single broadcast pair with the final state — agents and sessions
       // are now connected/active with the waiting flag set, so WS clients
@@ -652,21 +680,19 @@ const processEvent = db.transaction((hookType, data) => {
       if (/compact|compress|context.*(reduc|truncat|summar)/i.test(msg)) {
         eventType = "Compaction";
         summary = msg;
-      } else if (isWaitingForUserMessage(msg)) {
-        // Claude Code is blocked waiting for the user (permission prompt or
-        // explicit "waiting for input" notice). Stamp session + main agent
-        // so the dashboard can surface a yellow "Waiting" badge until the
-        // user responds — at which point the next PreToolUse/Stop clears it.
-        const ts = new Date().toISOString();
-        stmts.setSessionAwaitingInput.run(ts, sessionId);
-        broadcast("session_updated", stmts.getSession.get(sessionId));
-        if (mainAgentId) {
-          stmts.updateAgent.run(null, "waiting", null, null, null, null, mainAgentId);
-          stmts.setAgentAwaitingInput.run(ts, mainAgentId);
-          broadcast("agent_updated", stmts.getAgent.get(mainAgentId));
-        }
-        summary = msg;
       } else {
+        // Stamp session + main agent as awaiting, tagged with WHY: "action"
+        // (permission / needs-input — surfaces urgently) vs "idle" (turn-end
+        // idle notice — quiet). Cleared by the next PreToolUse/Stop/prompt.
+        const reason = awaitingReasonFor(data.notification_type, msg);
+        if (reason) {
+          setAwaiting(sessionId, mainAgentId, new Date().toISOString(), reason);
+          broadcast("session_updated", stmts.getSession.get(sessionId));
+          if (mainAgentId) {
+            stmts.updateAgent.run(null, "waiting", null, null, null, null, mainAgentId);
+            broadcast("agent_updated", stmts.getAgent.get(mainAgentId));
+          }
+        }
         summary = msg;
       }
       break;

@@ -41,6 +41,7 @@
   "status": {
     "working": "작업 중",
     "waiting": "대기 중",
+    "needsAction": "입력 필요",
     "completed": "완료됨",
     "error": "오류",
     "active": "활성",

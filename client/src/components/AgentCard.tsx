@@ -7,7 +7,7 @@ import { useTranslation } from "react-i18next";
 import { Bot, GitBranch, Clock, Wrench, Cpu, Coins } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { AgentStatusBadge } from "./StatusBadge";
-import { effectiveAgentStatus, isAgentAwaitingInput } from "../lib/types";
+import { effectiveAgentStatus, isAgentAwaitingInput, isAgentActionRequired } from "../lib/types";
 import type { Agent, Session } from "../lib/types";
 import { formatDuration, timeAgo, formatModelName, pathBasename, fmtCost } from "../lib/format";
 
@@ -40,6 +40,7 @@ export function AgentCard({ agent, session, label, onClick }: AgentCardProps) {
   const navigate = useNavigate();
   const { t } = useTranslation("kanban");
   const isWaiting = agent.status === "waiting" || isAgentAwaitingInput(agent);
+  const isAction = isAgentActionRequired(agent);
   const status = effectiveAgentStatus(agent);
   const isActive = agent.status === "working";
   const isMain = agent.type === "main";
@@ -127,11 +128,13 @@ export function AgentCard({ agent, session, label, onClick }: AgentCardProps) {
     <div
       onClick={handleClick}
       className={`card-hover p-4 cursor-pointer overflow-hidden ${
-        isWaiting
-          ? "border-l-2 border-l-yellow-500/60"
-          : isActive
-            ? "border-l-2 border-l-emerald-500/50"
-            : ""
+        isAction
+          ? "border-l-2 border-l-red-500/70"
+          : isWaiting
+            ? "border-l-2 border-l-gray-500/40"
+            : isActive
+              ? "border-l-2 border-l-emerald-500/50"
+              : ""
       }`}
     >
       <div className="flex items-start justify-between gap-2 mb-3 min-w-0">
@@ -154,7 +157,7 @@ export function AgentCard({ agent, session, label, onClick }: AgentCardProps) {
             {subtitle && <p className="text-[11px] text-gray-500 truncate">{subtitle}</p>}
           </div>
         </div>
-        <AgentStatusBadge status={status} />
+        <AgentStatusBadge status={status} reason={agent.awaiting_reason} />
       </div>
 
       {agent.task && (
