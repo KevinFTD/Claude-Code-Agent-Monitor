@@ -51,11 +51,11 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import { api } from "../lib/api";
+import { api, dashboardToken } from "../lib/api";
 import { eventBus } from "../lib/eventBus";
 import { tabbyPrefs } from "../components/Tabby/prefs";
 import { fmt, fmtCost, getCurrentLocale } from "../lib/format";
-import { subscribeToPush, unsubscribeFromPush } from "../lib/push";
+import { subscribeToPush, unsubscribeFromPush, showLocalNotification } from "../lib/push";
 import { Tip } from "../components/Tip";
 import { ImportHistory } from "../components/ImportHistory";
 import { Skeleton } from "../components/Skeleton";
@@ -1467,16 +1467,27 @@ export function Settings() {
               <div className="pt-3 border-t border-border">
                 <button
                   onClick={async () => {
-                    if (!("Notification" in window) || Notification.permission !== "granted")
-                      return;
-                    await fetch("/api/push/send", {
+                    // A local notification directly proves the browser can show
+                    // one — no dependency on server-relayed Web Push, which is
+                    // unreachable from a central server behind the GFW (FCM
+                    // blocked). Best-effort ping /api/push/send too so a working
+                    // relay still registers this browser for background pushes.
+                    await showLocalNotification(
+                      t("notifications.testTitle"),
+                      t("notifications.testBody")
+                    );
+                    const token = dashboardToken();
+                    fetch("/api/push/send", {
                       method: "POST",
-                      headers: { "Content-Type": "application/json" },
+                      headers: {
+                        "Content-Type": "application/json",
+                        ...(token ? { "x-dashboard-token": token } : {}),
+                      },
                       body: JSON.stringify({
                         title: t("notifications.testTitle"),
                         body: t("notifications.testBody"),
                       }),
-                    });
+                    }).catch(() => {});
                   }}
                   className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md text-gray-400 hover:text-gray-200 hover:bg-surface-4 border border-border transition-colors"
                 >

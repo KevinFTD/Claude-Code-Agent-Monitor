@@ -4,6 +4,50 @@
  * @author Son Nguyen <hoangson091104@gmail.com>
  */
 
+import { dashboardToken } from "./api";
+
+/**
+ * Headers for the `/api/push/*` calls. These endpoints sit behind the `/api`
+ * tokenGuard, so — like every other API call (see api.ts `request`) — they must
+ * carry the `x-dashboard-token` header when a DASHBOARD_TOKEN is configured
+ * (e.g. the tailnet/fleet deployment). Without it the server 401s and push
+ * subscription/relay silently fail. Merges any extra headers on top.
+ */
+function pushHeaders(extra?: Record<string, string>): Record<string, string> {
+  const token = dashboardToken();
+  return {
+    ...(token ? { "x-dashboard-token": token } : {}),
+    ...(extra || {}),
+  };
+}
+
+/**
+ * Shows a notification LOCALLY in this browser — no external push service
+ * involved. Prefers the service worker's `showNotification` (survives the tab
+ * being backgrounded) and falls back to the `Notification` constructor. No-ops
+ * unless permission is already granted.
+ *
+ * This is the reliable path when server-relayed Web Push can't be delivered —
+ * e.g. a central server that cannot reach Google's FCM (`fcm.googleapis.com`),
+ * as on a mainland-China VPS where FCM is blocked. Since a tab receiving live
+ * events is open anyway, a local notification is both correct and immediate.
+ * @param title Notification title.
+ * @param body Notification body text.
+ */
+export async function showLocalNotification(title: string, body: string): Promise<void> {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  try {
+    if ("serviceWorker" in navigator) {
+      const registration = await navigator.serviceWorker.ready;
+      await registration.showNotification(title, { body, icon: "/favicon.ico", silent: false });
+    } else {
+      new Notification(title, { body, icon: "/favicon.ico" });
+    }
+  } catch {
+    // Best effort — never throw from a notification.
+  }
+}
+
 /**
  * Decodes a URL-safe base64 VAPID public key (as served by
  * GET /api/push/vapid-public-key) into the raw byte buffer the Push API's
@@ -39,7 +83,7 @@ export async function subscribeToPush(): Promise<void> {
   const existing = await registration.pushManager.getSubscription();
   if (existing) return;
 
-  const res = await fetch("/api/push/vapid-public-key");
+  const res = await fetch("/api/push/vapid-public-key", { headers: pushHeaders() });
   const { publicKey } = await res.json();
 
   const subscription = await registration.pushManager.subscribe({
@@ -49,7 +93,7 @@ export async function subscribeToPush(): Promise<void> {
 
   await fetch("/api/push/subscribe", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: pushHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(subscription.toJSON()),
   });
 }
@@ -72,7 +116,7 @@ export async function unsubscribeFromPush(): Promise<void> {
 
   await fetch("/api/push/subscribe", {
     method: "DELETE",
-    headers: { "Content-Type": "application/json" },
+    headers: pushHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ endpoint }),
   });
 }

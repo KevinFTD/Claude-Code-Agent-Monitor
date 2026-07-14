@@ -7,7 +7,8 @@
 import { useEffect } from "react";
 import i18n from "../i18n";
 import { eventBus } from "../lib/eventBus";
-import { subscribeToPush } from "../lib/push";
+import { dashboardToken } from "../lib/api";
+import { subscribeToPush, showLocalNotification } from "../lib/push";
 import type { WSMessage, Session, Agent, DashboardEvent } from "../lib/types";
 
 const NOTIF_KEY = "agent-monitor-notifications";
@@ -60,33 +61,38 @@ function loadPrefs(): NotifPrefs {
 
 /**
  * Shows a browser notification, preferring a server-relayed push (so it can
- * arrive even if this tab isn't the active one, or the browser is backgrounded)
- * and falling back to a local service-worker/`Notification` call if the
- * server is unreachable. No-ops when the user hasn't granted permission.
+ * arrive even if this tab isn't the active one) but falling back to a LOCAL
+ * notification whenever the relay didn't actually deliver — the server was
+ * unreachable, OR it responded but pushed to zero subscriptions (e.g. a central
+ * server that can't reach Google's FCM, as on a mainland-China VPS). Without
+ * this response check the fallback never fired, since a 200 with `pushed:0`
+ * isn't a thrown error. No-ops when the user hasn't granted permission.
  * @param title Notification title.
  * @param body Notification body text.
  */
 async function notify(title: string, body: string) {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
+  let delivered = false;
   try {
-    await fetch("/api/push/send", {
+    const token = dashboardToken();
+    const res = await fetch("/api/push/send", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        // /api/push/send is behind the tokenGuard; without the token the
+        // server-relayed push 401s (e.g. on the tailnet/fleet deployment).
+        ...(token ? { "x-dashboard-token": token } : {}),
+      },
       body: JSON.stringify({ title, body }),
     });
+    const data = (await res.json().catch(() => null)) as { pushed?: number } | null;
+    delivered = !!(res.ok && data && (data.pushed ?? 0) > 0);
   } catch {
-    // Server unreachable - fall back to local notification
-    try {
-      if ("serviceWorker" in navigator) {
-        const registration = await navigator.serviceWorker.ready;
-        await registration.showNotification(title, { body, icon: "/favicon.ico", silent: false });
-      } else {
-        new Notification(title, { body, icon: "/favicon.ico" });
-      }
-    } catch {
-      // Silently ignore
-    }
+    delivered = false;
   }
+  // Fall back to a local notification if nothing was actually pushed. (When the
+  // server DID deliver, we skip this so a normal deployment doesn't double-fire.)
+  if (!delivered) await showLocalNotification(title, body);
 }
 
 /**
