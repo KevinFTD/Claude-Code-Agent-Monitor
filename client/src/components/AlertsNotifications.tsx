@@ -84,7 +84,7 @@ interface RuleFormState {
   count: string;
   window_minutes: string;
   minutes: string;
-  status: "working" | "waiting";
+  status: "working" | "waiting" | "idle";
   total_tokens: string;
   cooldown_seconds: string;
 }
@@ -526,11 +526,14 @@ export function AlertsNotifications() {
                       <div className="relative mt-1">
                         <select
                           value={form.status}
-                          onChange={(e) => set({ status: e.target.value as "working" | "waiting" })}
+                          onChange={(e) =>
+                            set({ status: e.target.value as "working" | "waiting" | "idle" })
+                          }
                           className="input w-full appearance-none pr-8"
                         >
                           <option value="working">working</option>
-                          <option value="waiting">waiting</option>
+                          <option value="waiting">waiting (needs you)</option>
+                          <option value="idle">idle</option>
                         </select>
                         <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
                       </div>

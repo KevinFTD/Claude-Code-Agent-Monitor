@@ -217,18 +217,18 @@ exports[`screen snapshots > Activity feed 1`] = `
                 </dd>
                 <dt>
                   <span
-                    class="badge bg-gray-500/10 text-gray-400"
+                    class="badge bg-gray-500/10 border-gray-500/20 text-gray-400"
                   >
                     <span
                       class="w-1.5 h-1.5 rounded-full bg-gray-400 "
                     />
-                    Waiting
+                    Idle
                   </span>
                 </dt>
                 <dd
                   class="self-center"
                 >
-                  eventFilters.help.statusWaitingDesc
+                  Settled or lifecycle events — tool results, turn boundaries, and metadata (PostToolUse, Stop, Notification, SessionEnd).
                 </dd>
                 <dt>
                   <span

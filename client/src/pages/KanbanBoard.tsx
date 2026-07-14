@@ -20,10 +20,8 @@ import { CardSkeleton } from "../components/Skeleton";
 import {
   STATUS_CONFIG,
   SESSION_STATUS_CONFIG,
-  isAgentAwaitingInput,
-  isSessionAwaitingInput,
-  isAgentActionRequired,
-  isSessionActionRequired,
+  effectiveAgentStatus,
+  effectiveSessionStatus,
 } from "../lib/types";
 import type {
   Agent,
@@ -40,10 +38,12 @@ type BoardView = "agents" | "sessions";
 const AGENT_FETCH_STATUSES: AgentStatus[] = ["working", "waiting", "completed", "error"];
 
 // Columns rendered on the Agents board.
-const AGENT_COLUMNS: EffectiveAgentStatus[] = ["working", "waiting", "completed", "error"];
+// Order: needs-you first, then in-progress, then idle, then terminal states.
+const AGENT_COLUMNS: EffectiveAgentStatus[] = ["waiting", "working", "idle", "completed", "error"];
 const SESSION_COLUMNS: EffectiveSessionStatus[] = [
-  "active",
   "waiting",
+  "active",
+  "idle",
   "completed",
   "error",
   "abandoned",
@@ -108,7 +108,9 @@ export function KanbanBoard() {
     // column's request stays bounded by how many sessions actually have
     // that status. The "waiting" column is derived client-side from the
     // active set (see grouping below).
-    const persistedStatuses = SESSION_COLUMNS.filter((s) => s !== "waiting");
+    // "waiting" and "idle" are UI projections of an active session, not base
+    // statuses — fetch the base statuses and bucket them client-side.
+    const persistedStatuses = SESSION_COLUMNS.filter((s) => s !== "waiting" && s !== "idle");
     const results = await Promise.all(
       persistedStatuses.map((status) => api.sessions.list({ status, limit: 10000 }))
     );
@@ -185,17 +187,11 @@ export function KanbanBoard() {
   // Bucket by effective status: agents with status "waiting" OR those with
   // awaiting_input_since set go into the "waiting" column. Other columns
   // exclude agents that belong in "waiting".
-  const isEffectivelyWaiting = (a: Agent) => a.status === "waiting" || isAgentAwaitingInput(a);
-
+  // Bucket by the effective status, which already encodes the waiting(action) /
+  // idle split — one item lands in exactly one column.
   const groupedAgents = AGENT_COLUMNS.reduce(
     (acc, status) => {
-      acc[status] =
-        status === "waiting"
-          ? visibleAgents
-              .filter(isEffectivelyWaiting)
-              // fleet-monitor: action-required (blocked, needs you) first.
-              .sort((a, b) => Number(isAgentActionRequired(b)) - Number(isAgentActionRequired(a)))
-          : visibleAgents.filter((a) => a.status === status && !isEffectivelyWaiting(a));
+      acc[status] = visibleAgents.filter((a) => effectiveAgentStatus(a) === status);
       return acc;
     },
     {} as Record<EffectiveAgentStatus, Agent[]>
@@ -203,15 +199,7 @@ export function KanbanBoard() {
 
   const groupedSessions = SESSION_COLUMNS.reduce(
     (acc, status) => {
-      acc[status] =
-        status === "waiting"
-          ? visibleSessions
-              .filter(isSessionAwaitingInput)
-              // fleet-monitor: action-required (blocked, needs you) first.
-              .sort(
-                (a, b) => Number(isSessionActionRequired(b)) - Number(isSessionActionRequired(a))
-              )
-          : visibleSessions.filter((s) => s.status === status && !isSessionAwaitingInput(s));
+      acc[status] = visibleSessions.filter((s) => effectiveSessionStatus(s) === status);
       return acc;
     },
     {} as Record<EffectiveSessionStatus, Session[]>

@@ -7,7 +7,7 @@ import { useTranslation } from "react-i18next";
 import { Bot, GitBranch, Clock, Wrench, Cpu, Coins } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { AgentStatusBadge } from "./StatusBadge";
-import { effectiveAgentStatus, isAgentAwaitingInput, isAgentActionRequired } from "../lib/types";
+import { effectiveAgentStatus } from "../lib/types";
 import type { Agent, Session } from "../lib/types";
 import { formatDuration, timeAgo, formatModelName, pathBasename, fmtCost } from "../lib/format";
 
@@ -39,10 +39,7 @@ interface AgentCardProps {
 export function AgentCard({ agent, session, label, onClick }: AgentCardProps) {
   const navigate = useNavigate();
   const { t } = useTranslation("kanban");
-  const isWaiting = agent.status === "waiting" || isAgentAwaitingInput(agent);
-  const isAction = isAgentActionRequired(agent);
   const status = effectiveAgentStatus(agent);
-  const isActive = agent.status === "working";
   const isMain = agent.type === "main";
 
   // Session-level metadata applies to every card in the session - main and
@@ -128,11 +125,11 @@ export function AgentCard({ agent, session, label, onClick }: AgentCardProps) {
     <div
       onClick={handleClick}
       className={`card-hover p-4 cursor-pointer overflow-hidden ${
-        isAction
+        status === "waiting"
           ? "border-l-2 border-l-red-500/70"
-          : isWaiting
+          : status === "idle"
             ? "border-l-2 border-l-gray-500/40"
-            : isActive
+            : status === "working"
               ? "border-l-2 border-l-emerald-500/50"
               : ""
       }`}
@@ -157,7 +154,7 @@ export function AgentCard({ agent, session, label, onClick }: AgentCardProps) {
             {subtitle && <p className="text-[11px] text-gray-500 truncate">{subtitle}</p>}
           </div>
         </div>
-        <AgentStatusBadge status={status} reason={agent.awaiting_reason} />
+        <AgentStatusBadge status={status} />
       </div>
 
       {agent.task && (

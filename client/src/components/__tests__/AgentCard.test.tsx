@@ -264,12 +264,12 @@ describe("AgentCard", () => {
         })}
       />
     );
-    expect(screen.getByText("Waiting")).toBeInTheDocument();
+    expect(screen.getByText("Idle")).toBeInTheDocument();
     const card = container.querySelector(".card-hover");
     expect(card?.className).toContain("border-l-gray-500/40");
   });
 
-  it("renders action-required waiting with a red accent + 'Needs You'", () => {
+  it("renders an action-required agent in the red 'Waiting' (needs-you) state", () => {
     const { container } = renderCard(
       <AgentCard
         agent={makeAgent({
@@ -279,7 +279,7 @@ describe("AgentCard", () => {
         })}
       />
     );
-    expect(screen.getByText("Needs You")).toBeInTheDocument();
+    expect(screen.getByText("Waiting")).toBeInTheDocument();
     const card = container.querySelector(".card-hover");
     expect(card?.className).toContain("border-l-red-500/70");
   });

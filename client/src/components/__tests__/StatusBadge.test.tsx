@@ -41,40 +41,28 @@ describe("AgentStatusBadge", () => {
     expect(dot).toBeInTheDocument();
   });
 
-  it("does not pulse an idle waiting badge (no reason)", () => {
-    const { container } = render(<AgentStatusBadge status="waiting" />);
-    expect(container.querySelector(".animate-pulse-dot")).not.toBeInTheDocument();
-  });
-
-  it("pulses an action-required waiting badge", () => {
-    const { container } = render(<AgentStatusBadge status="waiting" reason="action" />);
-    expect(container.querySelector(".animate-pulse-dot")).toBeInTheDocument();
-  });
-
-  it("should respect explicit pulse=false override", () => {
-    const { container } = render(<AgentStatusBadge status="working" pulse={false} />);
-    const dot = container.querySelector(".animate-pulse-dot");
-    expect(dot).not.toBeInTheDocument();
-  });
-
-  it("should respect explicit pulse=true override", () => {
-    const { container } = render(<AgentStatusBadge status="waiting" pulse={true} />);
-    const dot = container.querySelector(".animate-pulse-dot");
-    expect(dot).toBeInTheDocument();
-  });
-
-  it("renders idle waiting as a quiet gray 'Waiting' badge", () => {
+  it("colors a waiting (needs-you) badge red and pulses it", () => {
     const { container } = render(<AgentStatusBadge status="waiting" />);
     expect(screen.getByText("Waiting")).toBeInTheDocument();
+    expect(container.querySelector(".animate-pulse-dot")).toBeInTheDocument();
+    expect(container.querySelector(".bg-red-400")).toBeInTheDocument();
+  });
+
+  it("renders an idle badge gray and quiet (no pulse)", () => {
+    const { container } = render(<AgentStatusBadge status="idle" />);
+    expect(screen.getByText("Idle")).toBeInTheDocument();
     expect(container.querySelector(".animate-pulse-dot")).not.toBeInTheDocument();
     expect(container.querySelector(".bg-gray-400")).toBeInTheDocument();
   });
 
-  it("renders action-required waiting as a red 'Needs You' badge with pulse", () => {
-    const { container } = render(<AgentStatusBadge status="waiting" reason="action" />);
-    expect(screen.getByText("Needs You")).toBeInTheDocument();
+  it("should respect explicit pulse=false override", () => {
+    const { container } = render(<AgentStatusBadge status="working" pulse={false} />);
+    expect(container.querySelector(".animate-pulse-dot")).not.toBeInTheDocument();
+  });
+
+  it("should respect explicit pulse=true override", () => {
+    const { container } = render(<AgentStatusBadge status="idle" pulse={true} />);
     expect(container.querySelector(".animate-pulse-dot")).toBeInTheDocument();
-    expect(container.querySelector(".bg-red-400")).toBeInTheDocument();
   });
 });
 
@@ -99,19 +87,18 @@ describe("SessionStatusBadge", () => {
     expect(screen.getByText("Abandoned")).toBeInTheDocument();
   });
 
-  it("renders idle waiting as a quiet gray 'Waiting' badge", () => {
+  it("colors a waiting (needs-you) session badge red and pulses it", () => {
     const { container } = render(<SessionStatusBadge status="waiting" />);
     expect(screen.getByText("Waiting")).toBeInTheDocument();
-    // Session badge omits the dot entirely when not pulsing (idle) — assert the
-    // muted badge color instead.
-    expect(container.querySelector(".animate-pulse-dot")).not.toBeInTheDocument();
-    expect(container.querySelector(".text-gray-400")).toBeInTheDocument();
-  });
-
-  it("renders action-required waiting as a red 'Needs You' badge with pulse", () => {
-    const { container } = render(<SessionStatusBadge status="waiting" reason="action" />);
-    expect(screen.getByText("Needs You")).toBeInTheDocument();
     expect(container.querySelector(".animate-pulse-dot")).toBeInTheDocument();
     expect(container.querySelector(".bg-red-400")).toBeInTheDocument();
+  });
+
+  it("renders an idle session badge gray and quiet", () => {
+    const { container } = render(<SessionStatusBadge status="idle" />);
+    expect(screen.getByText("Idle")).toBeInTheDocument();
+    // Session badge omits the dot when not pulsing (idle) — assert badge color.
+    expect(container.querySelector(".animate-pulse-dot")).not.toBeInTheDocument();
+    expect(container.querySelector(".text-gray-400")).toBeInTheDocument();
   });
 });

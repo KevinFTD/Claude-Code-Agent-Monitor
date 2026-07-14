@@ -10,11 +10,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { FolderOpen, Bot, Clock, Coins, Cpu, Server } from "lucide-react";
 import { SessionStatusBadge } from "./StatusBadge";
-import {
-  effectiveSessionStatus,
-  isSessionAwaitingInput,
-  isSessionActionRequired,
-} from "../lib/types";
+import { effectiveSessionStatus } from "../lib/types";
 import type { Session } from "../lib/types";
 import { formatDuration, timeAgo, formatModelName } from "../lib/format";
 
@@ -33,9 +29,6 @@ function formatCost(cost: number): string {
 export function SessionCard({ session, onClick }: SessionCardProps) {
   const navigate = useNavigate();
   const { t } = useTranslation("kanban");
-  const isActive = session.status === "active";
-  const isWaiting = isSessionAwaitingInput(session);
-  const isAction = isSessionActionRequired(session);
   const status = effectiveSessionStatus(session);
   const title = session.name?.trim() || t("session.anonymous");
   const agentCount = session.agent_count ?? 0;
@@ -51,11 +44,11 @@ export function SessionCard({ session, onClick }: SessionCardProps) {
     <div
       onClick={handleClick}
       className={`card-hover p-4 cursor-pointer animate-fade-in overflow-hidden ${
-        isAction
+        status === "waiting"
           ? "border-l-2 border-l-red-500/70"
-          : isWaiting
+          : status === "idle"
             ? "border-l-2 border-l-gray-500/40"
-            : isActive
+            : status === "active"
               ? "border-l-2 border-l-emerald-500/50"
               : ""
       }`}
@@ -72,7 +65,7 @@ export function SessionCard({ session, onClick }: SessionCardProps) {
             </p>
           </div>
         </div>
-        <SessionStatusBadge status={status} reason={session.awaiting_reason} />
+        <SessionStatusBadge status={status} />
       </div>
 
       {session.cwd && (

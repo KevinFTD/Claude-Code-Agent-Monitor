@@ -41,7 +41,7 @@
   "status": {
     "working": "작업 중",
     "waiting": "대기 중",
-    "needsAction": "입력 필요",
+    "idle": "유휴",
     "completed": "완료됨",
     "error": "오류",
     "active": "활성",
@@ -158,7 +158,7 @@
       "statusConnectedDesc": "도구 호출이 완료되어 결과를 반환했습니다(PostToolUse).",
       "statusCompletedDesc": "턴 또는 생명주기 경계입니다(Stop, SubagentStop, Compaction).",
       "statusErrorDesc": "오류가 기록되었습니다(error, APIError).",
-      "statusIdleDesc": "생명주기 또는 메타데이터입니다(Notification, TurnDuration, SessionStart, SessionEnd).",
+      "statusIdleDesc": "종료 또는 생명주기 이벤트입니다 — 도구 결과, 턴 경계, 메타데이터(PostToolUse, Stop, Notification, SessionEnd).",
       "lifecycleTitle": "이벤트 생명주기",
       "lifecycleDesc": "일반적인 도구 호출은 동일한 tool_use_id를 공유하는 두 개의 이벤트를 발생시킵니다:",
       "lifecycleFlow": "PreToolUse (Working) → PostToolUse (Connected) → ... → Stop (Completed)",

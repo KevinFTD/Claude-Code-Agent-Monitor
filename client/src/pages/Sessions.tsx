@@ -364,10 +364,7 @@ export function Sessions() {
                       </div>
                     </td>
                     <td className="px-5 py-4">
-                      <SessionStatusBadge
-                        status={effectiveSessionStatus(session)}
-                        reason={session.awaiting_reason}
-                      />
+                      <SessionStatusBadge status={effectiveSessionStatus(session)} />
                     </td>
                     <td className="px-5 py-4 text-sm text-gray-400">
                       {formatDateTime(session.last_activity || session.started_at)}

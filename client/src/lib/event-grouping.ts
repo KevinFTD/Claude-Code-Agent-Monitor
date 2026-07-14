@@ -14,15 +14,20 @@ import type { DashboardEvent } from "./types";
 /** Best-effort status tag per event_type - drives the status badge shown on
  *  each row in the ActivityFeed / SessionDetail event streams.
  * @param type A `DashboardEvent.event_type` value (e.g. "PreToolUse", "Stop").
- * @returns The badge status; unrecognized types default to "waiting" rather
- *   than throwing, since new hook event types should degrade gracefully. */
-export function statusFromEventType(type: string): "working" | "waiting" | "completed" | "error" {
+ * @returns The badge status; unrecognized types default to "idle" rather
+ *   than throwing, since new hook event types should degrade gracefully.
+ *   Note: this is the per-event *category* axis, distinct from a session's
+ *   effective status. Settled/turn-boundary events (PostToolUse, Stop) and
+ *   lifecycle/metadata events map to the neutral "idle" badge; only a session
+ *   genuinely blocked on the user renders the red "waiting" (needs-you) badge,
+ *   which this function never returns. */
+export function statusFromEventType(type: string): "working" | "idle" | "completed" | "error" {
   switch (type) {
     case "PreToolUse":
       return "working";
     case "PostToolUse":
     case "Stop":
-      return "waiting";
+      return "idle";
     case "SubagentStop":
     case "Compaction":
       return "completed";
@@ -30,7 +35,7 @@ export function statusFromEventType(type: string): "working" | "waiting" | "comp
     case "APIError":
       return "error";
     default:
-      return "waiting";
+      return "idle";
   }
 }
 

@@ -41,7 +41,7 @@
   "status": {
     "working": "Đang xử lý",
     "waiting": "Đang chờ",
-    "needsAction": "Cần bạn",
+    "idle": "Rảnh",
     "completed": "Hoàn tất",
     "error": "Lỗi",
     "active": "Đang hoạt động",
@@ -158,7 +158,7 @@
       "statusConnectedDesc": "Công cụ hoàn tất và trả kết quả (PostToolUse).",
       "statusCompletedDesc": "Mốc vòng đời (Stop, SubagentStop, Compaction).",
       "statusErrorDesc": "Sự kiện lỗi (error, APIError).",
-      "statusIdleDesc": "Sự kiện vòng đời / siêu dữ liệu (Notification, TurnDuration, SessionStart, SessionEnd).",
+      "statusIdleDesc": "Sự kiện đã kết thúc hoặc vòng đời — kết quả công cụ, ranh giới lượt và siêu dữ liệu (PostToolUse, Stop, Notification, SessionEnd).",
       "lifecycleTitle": "Vòng đời sự kiện",
       "lifecycleDesc": "Một lần gọi công cụ thường phát ra hai sự kiện chia sẻ tool_use_id:",
       "lifecycleFlow": "PreToolUse (Working) → PostToolUse (Connected) → ... → Stop (Completed)",

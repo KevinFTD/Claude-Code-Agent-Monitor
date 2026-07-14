@@ -20,9 +20,14 @@ export type AgentType = "main" | "subagent";
  * "Waiting" badge so the dashboard can flag sessions blocked on a Claude Code
  * permission prompt without changing the underlying lifecycle enum.
  */
+// fleet-monitor: the single "waiting" projection is split into two effective
+// statuses — AWAITING_STATUS ("waiting") = blocked on the user now (permission /
+// needs-input), IDLE_STATUS ("idle") = turn ended, plain wait. Same split used
+// by the server (alerts) so front and back never diverge.
 export const AWAITING_STATUS = "waiting" as const;
-export type EffectiveAgentStatus = AgentStatus | typeof AWAITING_STATUS;
-export type EffectiveSessionStatus = SessionStatus | typeof AWAITING_STATUS;
+export const IDLE_STATUS = "idle" as const;
+export type EffectiveAgentStatus = AgentStatus | typeof IDLE_STATUS;
+export type EffectiveSessionStatus = SessionStatus | typeof AWAITING_STATUS | typeof IDLE_STATUS;
 
 /**
  * A Claude Code CLI invocation tracked by the dashboard - one row per top-level
@@ -150,16 +155,26 @@ export function isAgentActionRequired(agent: Agent | undefined | null): boolean 
   return isAgentAwaitingInput(agent) && agent?.awaiting_reason === "action";
 }
 
-/** Overlays {@link AWAITING_STATUS} on top of `agent.status` when the agent is
- *  blocked on user input; otherwise passes the persisted status through unchanged. */
+/** Projects the persisted status to an effective one: an awaiting agent becomes
+ *  "waiting" (action reason: blocked on the user) or "idle" (turn-end wait); a
+ *  base "waiting" agent with no awaiting flag is treated as idle. Must match the
+ *  server's effective-status split (alerts.js). */
 export function effectiveAgentStatus(agent: Agent): EffectiveAgentStatus {
-  return isAgentAwaitingInput(agent) ? AWAITING_STATUS : agent.status;
+  if (agent.status === "completed" || agent.status === "error") return agent.status;
+  if (isAgentAwaitingInput(agent)) {
+    return agent.awaiting_reason === "action" ? AWAITING_STATUS : IDLE_STATUS;
+  }
+  if (agent.status === "waiting") return IDLE_STATUS;
+  return agent.status; // working
 }
 
-/** Overlays {@link AWAITING_STATUS} on top of `session.status` when the session
- *  is blocked on user input; otherwise passes the persisted status through unchanged. */
+/** Session equivalent: awaiting + action → "waiting"; awaiting + idle → "idle";
+ *  otherwise the persisted lifecycle status. */
 export function effectiveSessionStatus(session: Session): EffectiveSessionStatus {
-  return isSessionAwaitingInput(session) ? AWAITING_STATUS : session.status;
+  if (isSessionAwaitingInput(session)) {
+    return session.awaiting_reason === "action" ? AWAITING_STATUS : IDLE_STATUS;
+  }
+  return session.status;
 }
 
 /**
@@ -528,7 +543,7 @@ export interface AlertRuleConfig {
    *  `status` must be held continuously before firing. */
   minutes?: number;
   /** status_duration: the agent status to watch for. */
-  status?: "working" | "waiting";
+  status?: "working" | "waiting" | "idle";
   /** token_threshold: cumulative token count that triggers the alert. */
   total_tokens?: number;
 }
@@ -1182,9 +1197,15 @@ export const STATUS_CONFIG: Record<
   },
   waiting: {
     labelKey: "common:status.waiting",
-    color: "text-yellow-400",
-    bg: "bg-yellow-500/10 border-yellow-500/20",
-    dot: "bg-yellow-400",
+    color: "text-red-400",
+    bg: "bg-red-500/15 border-red-500/25",
+    dot: "bg-red-400",
+  },
+  idle: {
+    labelKey: "common:status.idle",
+    color: "text-gray-400",
+    bg: "bg-gray-500/10 border-gray-500/20",
+    dot: "bg-gray-400",
   },
   completed: {
     labelKey: "common:status.completed",
@@ -1314,9 +1335,15 @@ export const SESSION_STATUS_CONFIG: Record<
   },
   waiting: {
     labelKey: "common:status.waiting",
-    color: "text-yellow-400",
-    bg: "bg-yellow-500/10 border-yellow-500/20",
-    dot: "bg-yellow-400",
+    color: "text-red-400",
+    bg: "bg-red-500/15 border-red-500/25",
+    dot: "bg-red-400",
+  },
+  idle: {
+    labelKey: "common:status.idle",
+    color: "text-gray-400",
+    bg: "bg-gray-500/10 border-gray-500/20",
+    dot: "bg-gray-400",
   },
   completed: {
     labelKey: "common:status.completed",

@@ -11,7 +11,10 @@ const { db, stmts } = require("../db");
 const { broadcast } = require("../websocket");
 
 const RULE_TYPES = ["event_pattern", "inactivity", "status_duration", "token_threshold"];
-const AGENT_STATUSES = ["working", "waiting"];
+// fleet-monitor: EFFECTIVE agent statuses a status_duration rule may watch —
+// "waiting" = blocked on the user (awaiting_reason=action), "idle" = plain
+// turn-end wait. Same split the UI shows, so rules can't diverge from it.
+const AGENT_STATUSES = ["working", "waiting", "idle"];
 
 // Enabled-rules cache. Hook ingest is hot — re-querying alert_rules on every
 // event would be wasted work since rules only change through the CRUD routes,
@@ -192,9 +195,17 @@ const staleSessionsStmt = db.prepare(
      AND updated_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)`
 );
 const stuckAgentsStmt = db.prepare(
+  // Match on the EFFECTIVE status (fleet-monitor): base "waiting" splits into
+  // "waiting" (awaiting_reason=action) vs "idle", mirroring the UI so a rule
+  // watching "waiting" only fires on genuinely-blocked agents.
   `SELECT a.id, a.session_id, a.name FROM agents a
    JOIN sessions s ON s.id = a.session_id
-   WHERE s.status = 'active' AND a.status = ?
+   WHERE s.status = 'active'
+     AND (CASE
+            WHEN a.status = 'waiting' AND a.awaiting_reason = 'action' THEN 'waiting'
+            WHEN a.status = 'waiting' THEN 'idle'
+            ELSE a.status
+          END) = ?
      AND a.updated_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)`
 );
 

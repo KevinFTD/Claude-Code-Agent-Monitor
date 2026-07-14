@@ -34,9 +34,9 @@ export function EventFiltersInfo() {
             </dt>
             <dd className="self-center">{t("eventFilters.help.statusWorkingDesc")}</dd>
             <dt>
-              <AgentStatusBadge status="waiting" />
+              <AgentStatusBadge status="idle" />
             </dt>
-            <dd className="self-center">{t("eventFilters.help.statusWaitingDesc")}</dd>
+            <dd className="self-center">{t("eventFilters.help.statusIdleDesc")}</dd>
             <dt>
               <AgentStatusBadge status="completed" />
             </dt>

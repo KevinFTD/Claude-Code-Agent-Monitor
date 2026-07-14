@@ -30,16 +30,18 @@
   "tooltip": {
     "agent": {
       "working": "Agent가 현재 도구 호출을 실행하고 있습니다.\n\nPreToolUse 또는 UserPromptSubmit에서 진입하며, Stop(턴 종료) 시 종료됩니다.",
-      "waiting": "Agent가 턴을 마치고 사용자 응답을 기다리고 있습니다 - Claude가 다음 사용자 메시지를 기다리거나 도구 사용 권한을 요청한 상태입니다.\n\n다음 PreToolUse / PostToolUse가 발생하거나 세션이 종료되면 해제됩니다.",
+      "waiting": "에이전트가 지금 당신을 기다립니다 — 계속하려면 권한 승인 또는 결정이 필요합니다.\n\n먼저 처리하세요; 다음 응답/승인 시 해제됩니다.",
       "completed": "이 세션에서 Agent가 완전히 종료되었습니다 - 보통 SessionEnd가 발생했거나, Subagent의 경우 SubagentStop이 처리되었기 때문입니다.\n\n이 Agent에 대한 추가 활동은 더 이상 기록되지 않습니다.",
-      "error": "Agent에서 오류가 기록되어 더 이상 진행하지 않습니다. 메인 Agent의 경우 stop_reason=error인 Stop에서, Subagent의 경우 실패한 실행에서 비롯됩니다."
+      "error": "Agent에서 오류가 기록되어 더 이상 진행하지 않습니다. 메인 Agent의 경우 stop_reason=error인 Stop에서, Subagent의 경우 실패한 실행에서 비롯됩니다.",
+      "idle": "에이전트가 턴을 마치고 유휴 상태입니다 — 다음 메시지를 기다리지만 아무것도 막고 있지 않습니다."
     },
     "session": {
       "active": "세션이 턴 진행 중입니다 - Claude가 현재 실행 중이며 사용자를 막고 있는 것은 없습니다. 성격상 짧게 지속되며, 도구 호출 중에는 Active를, 턴이 끝나면 다시 Waiting을 오갑니다.",
-      "waiting": "세션이 사용자 응답을 기다리고 있습니다. Claude가 턴을 마쳤거나(가장 흔한 경우), 권한 프롬프트를 띄우고 사용자의 응답을 기다리는 상태입니다.\n\n답변이 필요한 세션을 찾을 때 여기를 확인하세요.",
+      "waiting": "세션이 당신을 기다립니다 — 권한 요청 또는 결정. 지금 처리해야 할 항목입니다.",
       "completed": "세션이 완전히 종료되었습니다 - SessionEnd가 발생했거나(CLI가 정상 종료됨) 사용자가 명시적으로 종료했습니다.\n\n이 세션의 모든 Agent도 함께 완료됩니다.",
       "error": "세션이 오류와 함께 종료되었습니다 - Claude가 stop_reason=error를 반환했거나, 복구 불가능한 오류가 발생했거나, 상위 API 오류로 실행이 중단되었습니다.",
-      "abandoned": "세션이 정상적인 SessionEnd 없이 방치되었습니다. 5분 이상 활동이 없으면 abandoned로 표시됩니다(/resume에 의한 고아 세션, 네트워크 끊김, CLI 강제 종료 등). Completed와 달리 실제 종료 신호를 확인하지 못한 경우입니다."
+      "abandoned": "세션이 정상적인 SessionEnd 없이 방치되었습니다. 5분 이상 활동이 없으면 abandoned로 표시됩니다(/resume에 의한 고아 세션, 네트워크 끊김, CLI 강제 종료 등). Completed와 달리 실제 종료 신호를 확인하지 못한 경우입니다.",
+      "idle": "세션이 턴을 마치고 유휴 상태입니다. 더 보낼 수 있지만 막힌 것은 없습니다."
     }
   }
 }

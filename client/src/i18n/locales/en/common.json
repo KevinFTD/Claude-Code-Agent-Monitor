@@ -41,7 +41,7 @@
   "status": {
     "working": "Working",
     "waiting": "Waiting",
-    "needsAction": "Needs You",
+    "idle": "Idle",
     "completed": "Completed",
     "error": "Error",
     "active": "Active",
@@ -158,7 +158,7 @@
       "statusConnectedDesc": "Tool call completed and returned a result (PostToolUse).",
       "statusCompletedDesc": "Turn or lifecycle boundary (Stop, SubagentStop, Compaction).",
       "statusErrorDesc": "An error was recorded (error, APIError).",
-      "statusIdleDesc": "Lifecycle or metadata (Notification, TurnDuration, SessionStart, SessionEnd).",
+      "statusIdleDesc": "Settled or lifecycle events — tool results, turn boundaries, and metadata (PostToolUse, Stop, Notification, SessionEnd).",
       "lifecycleTitle": "Event lifecycle",
       "lifecycleDesc": "A typical tool call emits two events sharing the same tool_use_id:",
       "lifecycleFlow": "PreToolUse (Working) → PostToolUse (Connected) → ... → Stop (Completed)",

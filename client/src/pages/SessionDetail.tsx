@@ -521,10 +521,7 @@ export function SessionDetail() {
             <h2 className="text-xl font-semibold text-gray-100">
               {session.name || `${t("defaultName")}${session.id.slice(0, 8)}`}
             </h2>
-            <SessionStatusBadge
-              status={effectiveSessionStatus(session)}
-              reason={session.awaiting_reason}
-            />
+            <SessionStatusBadge status={effectiveSessionStatus(session)} />
           </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1">
             <span className="inline-flex items-center gap-1.5 text-xs text-gray-500 font-mono bg-surface-2 px-2 py-1 rounded">

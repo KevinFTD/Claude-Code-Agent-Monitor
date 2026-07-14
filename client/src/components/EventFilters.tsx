@@ -50,17 +50,18 @@ export function isEmptyFilters(f: EventFiltersValue): boolean {
 }
 
 // Status preset → event_type values. Mirrors the status badges shown on event
-// rows (see ActivityFeed/SessionDetail statusFromEventType). "Idle" is handled
-// as everything not covered by the other presets, which translates to an empty
-// preset that doesn't restrict the query (same as no selection).
+// rows (see ActivityFeed/SessionDetail statusFromEventType). This is the
+// per-event *category* axis: "idle" is the neutral settled/turn-boundary bucket
+// (PostToolUse, Stop) and must not be confused with a session's red "waiting"
+// (needs-you) status, which is not an event category at all.
 export const STATUS_TO_EVENT_TYPES: Record<string, string[]> = {
   working: ["PreToolUse"],
-  waiting: ["PostToolUse", "Stop"],
+  idle: ["PostToolUse", "Stop"],
   completed: ["Stop", "SubagentStop", "Compaction"],
   error: ["error", "APIError"],
 };
 
-export const STATUS_OPTIONS = ["working", "waiting", "completed", "error"] as const;
+export const STATUS_OPTIONS = ["working", "idle", "completed", "error"] as const;
 
 // Expand the selected status presets into a union of event_type values. The
 // consumer merges this with any explicit event_type selection so both layers
@@ -194,7 +195,7 @@ export function EventFilters({
           options={[...STATUS_OPTIONS]}
           labels={{
             working: t("status.working"),
-            waiting: t("status.waiting"),
+            idle: t("status.idle"),
             completed: t("status.completed"),
             error: t("status.error"),
           }}
