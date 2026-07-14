@@ -1,5 +1,15 @@
 # Claude Code Working Guide
 
+> **This branch (`fleet-monitor`) is a fork run as the central dashboard for a
+> Tailscale fleet.** Before changing behavior or deploying, read
+> [`docs/FLEET-FORK-CHANGES.md`](docs/FLEET-FORK-CHANGES.md) (this repo's deltas:
+> status split, snapshot-based cost, notification/token + local-fallback). The
+> build→ship→deploy pipeline, the tailnet VPS/HTTPS topology, and the hard-won
+> gotchas (FCM blocked → local notifications, `/api/run` loopback-only, etc.)
+> live in the sibling repo's `~/code/claude-fleet-monitor/CLAUDE.md`. The dashboard
+> is deployed as a linux/amd64 image built on a Mac and `docker load`ed on the
+> VPS — it is NOT `npm start`ed locally.
+
 ## Project mission
 - Maintain a reliable local-first dashboard for Claude Code session monitoring.
 - Preserve real-time behavior (hooks -> API -> SQLite -> WebSocket -> UI).
