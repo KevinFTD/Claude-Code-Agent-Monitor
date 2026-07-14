@@ -73,6 +73,7 @@
     "sessionComplete": "세션이 완료될 때",
     "sessionError": "세션에 오류가 발생할 때",
     "subagentSpawned": "Subagent가 생성될 때",
+    "needsAction": "Claude가 기다리는 중 (권한 / 입력 대기)",
     "testTitle": "Agent Monitor",
     "testBody": "알림이 정상적으로 작동합니다!",
     "sendTest": "테스트 알림 보내기",

@@ -91,6 +91,7 @@ interface NotifPrefs {
   onSessionError: boolean;
   onSessionComplete: boolean;
   onSubagentSpawn: boolean;
+  onNeedsAction: boolean;
 }
 
 const defaultNotif: NotifPrefs = {
@@ -99,6 +100,7 @@ const defaultNotif: NotifPrefs = {
   onSessionError: true,
   onSessionComplete: false,
   onSubagentSpawn: false,
+  onNeedsAction: false,
 };
 
 function loadNotifPrefs(): NotifPrefs {
@@ -1430,6 +1432,14 @@ export function Settings() {
                 {t("notifications.notifyWhen")}
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="flex items-center gap-3 bg-surface-2 rounded-lg px-3.5 py-3">
+                  <Bell className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                  <Toggle
+                    checked={notifPrefs.onNeedsAction}
+                    onChange={(v) => updateNotifPrefs({ onNeedsAction: v })}
+                    label={t("notifications.needsAction")}
+                  />
+                </div>
                 <div className="flex items-center gap-3 bg-surface-2 rounded-lg px-3.5 py-3">
                   <Play className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                   <Toggle

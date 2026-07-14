@@ -73,6 +73,7 @@
     "sessionComplete": "Session completes",
     "sessionError": "Session errors",
     "subagentSpawned": "Subagent spawned",
+    "needsAction": "Claude needs you (permission / waiting for input)",
     "testTitle": "Agent Monitor",
     "testBody": "Notifications are working!",
     "sendTest": "Send Test Notification",

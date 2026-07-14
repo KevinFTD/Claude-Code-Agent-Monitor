@@ -23,39 +23,32 @@ interface NotifPrefs {
   onSessionError: boolean;
   onSessionComplete: boolean;
   onSubagentSpawn: boolean;
+  /** Fire on Claude Code `Notification` hook events — "Claude needs your
+   *  permission" and "Claude is waiting for your input". Opt-in (default false):
+   *  these are frequent, so nothing fires unless the user turns this on. */
+  onNeedsAction: boolean;
 }
 
 /** Reads {@link NotifPrefs} from `localStorage`, merging over safe defaults so
  *  a partial/older saved object (or none at all) still yields a valid result.
  *  `enabled` defaults to false (opt-in) even in the "no saved value" branch,
  *  while individual event toggles default to a sensible starting mix. */
+const DEFAULT_PREFS: NotifPrefs = {
+  enabled: false,
+  onNewSession: true,
+  onSessionError: true,
+  onSessionComplete: false,
+  onSubagentSpawn: false,
+  onNeedsAction: false,
+};
+
 function loadPrefs(): NotifPrefs {
   try {
     const raw = localStorage.getItem(NOTIF_KEY);
-    if (!raw)
-      return {
-        enabled: false,
-        onNewSession: true,
-        onSessionError: true,
-        onSessionComplete: false,
-        onSubagentSpawn: false,
-      };
-    return {
-      enabled: false,
-      onNewSession: true,
-      onSessionError: true,
-      onSessionComplete: false,
-      onSubagentSpawn: false,
-      ...JSON.parse(raw),
-    };
+    if (!raw) return { ...DEFAULT_PREFS };
+    return { ...DEFAULT_PREFS, ...JSON.parse(raw) };
   } catch {
-    return {
-      enabled: false,
-      onNewSession: true,
-      onSessionError: true,
-      onSessionComplete: false,
-      onSubagentSpawn: false,
-    };
+    return { ...DEFAULT_PREFS };
   }
 }
 
@@ -155,7 +148,7 @@ export function useNotifications() {
               i18n.t("errors:notifications.sessionCompleted"),
               ev.summary || i18n.t("errors:notifications.sessionClosed")
             );
-          } else if (ev.event_type === "Notification") {
+          } else if (ev.event_type === "Notification" && prefs.onNeedsAction) {
             notify(
               i18n.t("errors:notifications.defaultTitle"),
               ev.summary || i18n.t("errors:notifications.defaultBody")
