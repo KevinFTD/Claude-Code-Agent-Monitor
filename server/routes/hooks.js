@@ -704,6 +704,28 @@ const processEvent = db.transaction((hookType, data) => {
       break;
     }
 
+    case "PermissionRequest": {
+      // Fires the MOMENT a tool-permission dialog appears — the reliable
+      // "blocked on the user" signal. Notification is best-effort (docs: fires
+      // "after the notification occurs", not guaranteed per prompt), so a
+      // focused-terminal permission prompt often never emits one and the session
+      // wrongly stays "active". PermissionRequest fires right after PreToolUse
+      // (which optimistically cleared awaiting + set the agent working), so this
+      // re-stamps awaiting=action. Cleared by the following PostToolUse (once
+      // approved) or the next user action. (A silent, exit-0 observer hook does
+      // NOT auto-approve — the user still gets the normal prompt.)
+      const tool = data.tool_name || toolName || "a tool";
+      summary = `Permission requested: ${tool}`;
+      awaitingReason = "action";
+      setAwaiting(sessionId, mainAgentId, new Date().toISOString(), "action");
+      broadcast("session_updated", stmts.getSession.get(sessionId));
+      if (mainAgentId) {
+        stmts.updateAgent.run(null, "waiting", null, null, null, null, mainAgentId);
+        broadcast("agent_updated", stmts.getAgent.get(mainAgentId));
+      }
+      break;
+    }
+
     default: {
       summary = `Event: ${hookType}`;
     }

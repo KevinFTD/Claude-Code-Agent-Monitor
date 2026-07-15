@@ -838,6 +838,36 @@ describe("Hook Event Processing", () => {
     assert.ok(main.awaiting_input_since, "main agent should be flagged as awaiting input");
   });
 
+  it("stamps awaiting=action on a PermissionRequest, even right after a PreToolUse", async () => {
+    await post("/api/hooks/event", {
+      hook_type: "SessionStart",
+      data: { session_id: "hook-sess-perm" },
+    });
+    // PreToolUse fires first (Claude decides to use the tool) and optimistically
+    // clears awaiting / marks working — mirroring the real lifecycle where the
+    // permission dialog appears *after* PreToolUse.
+    await post("/api/hooks/event", {
+      hook_type: "PreToolUse",
+      data: { session_id: "hook-sess-perm", tool_name: "Bash" },
+    });
+    // The permission dialog appears → PermissionRequest. This must re-stamp the
+    // waiting state so the session shows 等待中 (unlike Notification, which may
+    // never fire for a focused-terminal prompt).
+    const res = await post("/api/hooks/event", {
+      hook_type: "PermissionRequest",
+      data: { session_id: "hook-sess-perm", tool_name: "Bash" },
+    });
+    assert.equal(res.status, 200);
+
+    const sessRes = await fetch("/api/sessions/hook-sess-perm");
+    assert.ok(sessRes.body.session.awaiting_input_since, "session should be awaiting input");
+    assert.equal(
+      sessRes.body.session.awaiting_reason,
+      "action",
+      "PermissionRequest is a needs-action (等待中) signal, not idle"
+    );
+  });
+
   it("should clear awaiting_input_since when the user resumes (next PreToolUse)", async () => {
     // Re-arm the waiting state — previous test may have left it set, but be
     // explicit so this test stands on its own.
