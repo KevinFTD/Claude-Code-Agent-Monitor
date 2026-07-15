@@ -47,6 +47,16 @@ them two first-class statuses, computed identically on client and server from
 - **idle (空闲中)** — Claude finished its turn, plain output, not blocking
   (`awaiting_reason === "idle"` or legacy null). Rendered neutral gray.
 
+`awaiting_reason` is stamped in `server/routes/hooks.js` from two hook signals:
+the **`PermissionRequest`** hook (fires the moment a tool-permission dialog
+appears — the reliable needs-action signal → `action`) and the **`Notification`**
+hook (best-effort; classified into action/idle/null). `Notification` alone was
+unreliable — it fires "after the notification occurs" and often not at all for a
+focused-terminal permission prompt — so machines must also register a
+`PermissionRequest` hook pointing at the reporter. The needs-action browser
+notification and the broadcast both gate on the server-computed `awaiting_reason`
+(no client-side re-classification).
+
 Touched:
 - `client/src/lib/types.ts` — `effectiveAgentStatus` / `effectiveSessionStatus`,
   `IDLE_STATUS`, `STATUS_CONFIG` / `SESSION_STATUS_CONFIG` colors.
