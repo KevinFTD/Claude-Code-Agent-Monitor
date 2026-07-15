@@ -73,7 +73,7 @@
     "sessionComplete": "会话完成",
     "sessionError": "会话出错",
     "subagentSpawned": "Subagent生成",
-    "needsAction": "需要你操作(权限 / 等待输入)",
+    "needsAction": "需要你操作(权限请求 / 等待中)",
     "testTitle": "Agent 监控",
     "testBody": "通知功能正常！",
     "sendTest": "发送测试通知",

@@ -358,6 +358,11 @@ const processEvent = db.transaction((hookType, data) => {
   let toolName = data.tool_name || null;
   let summary = null;
   let agentId = mainAgentId;
+  // For Notification events: the computed awaiting reason ("action" = blocked,
+  // needs the user now / "idle" = turn-end idle / null = non-waiting). Surfaced
+  // on the broadcast so clients notify only on true needs-action, not idle —
+  // reusing the server's single classification (no client-side divergence).
+  let awaitingReason = null;
 
   // NOTE: clearing of awaiting_input_since is handled per-case below rather
   // than blanket-clearing on every non-Notification event. The blanket rule
@@ -685,6 +690,7 @@ const processEvent = db.transaction((hookType, data) => {
         // (permission / needs-input — surfaces urgently) vs "idle" (turn-end
         // idle notice — quiet). Cleared by the next PreToolUse/Stop/prompt.
         const reason = awaitingReasonFor(data.notification_type, msg);
+        awaitingReason = reason;
         if (reason) {
           setAwaiting(sessionId, mainAgentId, new Date().toISOString(), reason);
           broadcast("session_updated", stmts.getSession.get(sessionId));
@@ -977,6 +983,7 @@ const processEvent = db.transaction((hookType, data) => {
     event_type: eventType,
     tool_name: toolName,
     summary,
+    awaiting_reason: awaitingReason,
     created_at: new Date().toISOString(),
   };
   broadcast("new_event", event);

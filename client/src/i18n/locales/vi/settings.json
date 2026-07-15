@@ -73,7 +73,7 @@
     "sessionComplete": "Phiên hoàn tất",
     "sessionError": "Phiên gặp lỗi",
     "subagentSpawned": "Subagent được tạo",
-    "needsAction": "Claude cần bạn (quyền / chờ nhập)",
+    "needsAction": "Claude cần bạn thao tác (yêu cầu quyền)",
     "testTitle": "Agent Monitor",
     "testBody": "Thông báo đang hoạt động!",
     "sendTest": "Gửi thông báo thử",

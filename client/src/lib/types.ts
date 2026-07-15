@@ -204,6 +204,12 @@ export interface DashboardEvent {
   /** Opaque JSON string of the full hook payload (tool_input/tool_response,
    *  cwd, etc.) - `JSON.parse` before reading; null if the payload was empty. */
   data: string | null;
+  /** fleet-monitor: on a live `Notification` event broadcast, the server's
+   *  classification of why the session is waiting — "action" (permission /
+   *  needs-input, blocks the user now), "idle" (turn-end idle notice), or null
+   *  (non-waiting notification). Lets the needs-action notification fire on the
+   *  real 等待中 case only, not idle. Absent on persisted/historical rows. */
+  awaiting_reason?: "action" | "idle" | null;
   /** ISO timestamp the event was recorded (ingest time, not hook-reported time). */
   created_at: string;
 }

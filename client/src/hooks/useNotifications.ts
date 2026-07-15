@@ -148,7 +148,14 @@ export function useNotifications() {
               i18n.t("errors:notifications.sessionCompleted"),
               ev.summary || i18n.t("errors:notifications.sessionClosed")
             );
-          } else if (ev.event_type === "Notification" && prefs.onNeedsAction) {
+          } else if (
+            ev.event_type === "Notification" &&
+            ev.awaiting_reason === "action" &&
+            prefs.onNeedsAction
+          ) {
+            // Only the true needs-action case (等待中: permission / needs-input).
+            // Idle "waiting for input" notices (awaiting_reason "idle") and
+            // non-waiting notifications (null) are intentionally NOT notified.
             notify(
               i18n.t("errors:notifications.defaultTitle"),
               ev.summary || i18n.t("errors:notifications.defaultBody")
