@@ -338,11 +338,10 @@ function createOpenApiSpec() {
         },
         SessionDetailResponse: {
           type: "object",
-          required: ["session", "agents", "events"],
+          required: ["session", "agents"],
           properties: {
             session: { $ref: "#/components/schemas/Session" },
             agents: { type: "array", items: { $ref: "#/components/schemas/Agent" } },
-            events: { type: "array", items: { $ref: "#/components/schemas/DashboardEvent" } },
           },
         },
         TranscriptInfo: {

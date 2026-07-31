@@ -251,7 +251,7 @@ describe("Sessions API", () => {
     assert.equal(res.status, 200);
     assert.equal(res.body.session.id, "sess-1");
     assert.ok(Array.isArray(res.body.agents));
-    assert.ok(Array.isArray(res.body.events));
+    assert.equal(res.body.events, undefined);
   });
 
   it("should return 404 for nonexistent session", async () => {

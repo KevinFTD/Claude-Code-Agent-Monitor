@@ -88,8 +88,24 @@ header that `api.ts` injects, so every `/api/push/*` call 401'd once a
   a local notification directly. Local notifications require the dashboard tab to
   be open; a fully-closed tab still relies on server push (unavailable here).
 
+## 5. Session-detail endpoint no longer embeds the full event log
+
+`GET /api/sessions/:id` returned **every** event row for the session
+(`listEventsBySession.all()`). A long-lived session accumulated 5k+ events →
+a 24 MB JSON response, which on a slow Mac↔VPS tailnet link (~130 KB/s
+observed) took minutes to download — the session-detail page sat on its
+skeleton forever ("刷不出来"). The client never even used the field: the detail
+page pulls events through the paginated `/api/events` endpoint.
+
+- `server/routes/sessions.js` — the detail response is now
+  `{ session, agents, workflows }` (24 MB → ~16 KB for the worst session).
+- `server/openapi.js` — `SessionDetailResponse` schema updated to match.
+- `client/src/lib/api.ts` — `sessions.get` return type updated.
+- `bin/ccam.js` — the CLI's "Recent events" block now fetches
+  `/api/events?session_id=<id>&limit=10` instead of reading the embedded array.
+
 ## Verification
 
-`npm run test:client` (253) and `npm run test:server` (636, incl. the new
+`npm run test:client` (253) and `npm run test:server` (637, incl. the new
 transcript-ingest token test) pass. Screen snapshots regenerated for the status
 color/label changes.

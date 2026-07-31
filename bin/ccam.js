@@ -739,7 +739,15 @@ async function cmdSession(positional) {
   const agents = d.agents || [];
   if (agents.length) renderAgentTree(agents);
 
-  const events = (d.events || []).slice(0, 10);
+  // The detail endpoint no longer embeds events (they can run to tens of MB
+  // for long sessions) - pull the newest few from the paginated list instead.
+  let events = [];
+  try {
+    const ev = await get(`/api/events?session_id=${encodeURIComponent(id)}&limit=10`);
+    events = ev.events || [];
+  } catch {
+    /* events are best-effort in the detail view */
+  }
   if (events.length) renderEventLines(events);
 }
 

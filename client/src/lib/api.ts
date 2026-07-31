@@ -134,13 +134,13 @@ export const api = {
         `/sessions${queryString ? `?${queryString}` : ""}`
       );
     },
-    /** GET /api/sessions/:id - one session with its agents, events, and any
-     *  Workflow-tool runs launched from it. */
+    /** GET /api/sessions/:id - one session with its agents and any
+     *  Workflow-tool runs launched from it. Events are NOT included - fetch
+     *  them through the paginated /api/events endpoint instead. */
     get: (id: string) =>
       request<{
         session: Session;
         agents: Agent[];
-        events: DashboardEvent[];
         workflows: WorkflowRun[];
       }>(`/sessions/${encodeURIComponent(id)}`),
     /** GET /api/sessions/:id/stats - per-session rollups for the detail page. */
