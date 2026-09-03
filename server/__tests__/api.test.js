@@ -868,6 +868,142 @@ describe("Hook Event Processing", () => {
     );
   });
 
+  it("keeps 等待中 while a background subagent's tool events arrive during a main-thread PermissionRequest", async () => {
+    // Real fleet trace (2026-09-03): main thread blocked on a Bash permission
+    // prompt, a backgrounded favie-executor subagent kept editing files. Claude
+    // Code stamps agent_id/agent_type on every hook payload emitted inside a
+    // subagent; main-thread payloads carry neither.
+    const sid = "hook-sess-perm-bg";
+    await post("/api/hooks/event", { hook_type: "SessionStart", data: { session_id: sid } });
+    await post("/api/hooks/event", {
+      hook_type: "PreToolUse",
+      data: { session_id: sid, tool_name: "Bash" },
+    });
+    await post("/api/hooks/event", {
+      hook_type: "PermissionRequest",
+      data: { session_id: sid, tool_name: "Bash" },
+    });
+
+    const sub = { agent_id: "a33e9e7f68660e57f", agent_type: "favie-executor" };
+    await post("/api/hooks/event", {
+      hook_type: "PreToolUse",
+      data: { session_id: sid, tool_name: "Edit", ...sub },
+    });
+    await post("/api/hooks/event", {
+      hook_type: "PostToolUse",
+      data: { session_id: sid, tool_name: "Edit", ...sub },
+    });
+    await post("/api/hooks/event", {
+      hook_type: "SubagentStop",
+      data: { session_id: sid, agent_id: "a194a04c4085e79f6", agent_type: "" },
+    });
+
+    const during = await fetch(`/api/sessions/${sid}`);
+    assert.ok(during.body.session.awaiting_input_since, "subagent activity must not clear 等待中");
+    assert.equal(during.body.session.awaiting_reason, "action");
+    const mainDuring = (await fetch(`/api/agents?session_id=${sid}`)).body.agents.find(
+      (a) => a.type === "main"
+    );
+    assert.ok(mainDuring.awaiting_input_since, "main agent stays flagged");
+    assert.equal(
+      mainDuring.status,
+      "waiting",
+      "subagent tool events must not promote main to working"
+    );
+
+    // The user answers the prompt → main's own PostToolUse arrives → cleared.
+    await post("/api/hooks/event", {
+      hook_type: "PostToolUse",
+      data: { session_id: sid, tool_name: "Bash" },
+    });
+    const after = await fetch(`/api/sessions/${sid}`);
+    assert.equal(after.body.session.awaiting_input_since, null);
+  });
+
+  it("clears 等待中 when the subagent that raised the PermissionRequest gets its answer", async () => {
+    const sid = "hook-sess-perm-sub";
+    await post("/api/hooks/event", { hook_type: "SessionStart", data: { session_id: sid } });
+    await post("/api/hooks/event", {
+      hook_type: "PreToolUse",
+      data: { session_id: sid, tool_name: "Read" },
+    });
+    await post("/api/hooks/event", {
+      hook_type: "PostToolUse",
+      data: { session_id: sid, tool_name: "Read" },
+    });
+
+    const subX = { agent_id: "subx", agent_type: "Explore" };
+    const subY = { agent_id: "suby", agent_type: "Explore" };
+    await post("/api/hooks/event", {
+      hook_type: "PreToolUse",
+      data: { session_id: sid, tool_name: "Bash", ...subX },
+    });
+    await post("/api/hooks/event", {
+      hook_type: "PermissionRequest",
+      data: { session_id: sid, tool_name: "Bash", ...subX },
+    });
+    const blocked = await fetch(`/api/sessions/${sid}`);
+    assert.ok(
+      blocked.body.session.awaiting_input_since,
+      "a subagent's prompt still blocks the user"
+    );
+    assert.equal(blocked.body.session.awaiting_reason, "action");
+
+    // Another subagent working in parallel does not answer X's dialog.
+    await post("/api/hooks/event", {
+      hook_type: "PreToolUse",
+      data: { session_id: sid, tool_name: "Read", ...subY },
+    });
+    const stillBlocked = await fetch(`/api/sessions/${sid}`);
+    assert.ok(
+      stillBlocked.body.session.awaiting_input_since,
+      "another subagent's tool event must not clear it"
+    );
+
+    // X's tool completes → its dialog was answered → cleared.
+    await post("/api/hooks/event", {
+      hook_type: "PostToolUse",
+      data: { session_id: sid, tool_name: "Bash", ...subX },
+    });
+    const after = await fetch(`/api/sessions/${sid}`);
+    assert.equal(after.body.session.awaiting_input_since, null);
+  });
+
+  it("stays 等待中 after a subagent's dialog is answered while the main thread's is still open", async () => {
+    const sid = "hook-sess-perm-both";
+    await post("/api/hooks/event", { hook_type: "SessionStart", data: { session_id: sid } });
+    await post("/api/hooks/event", {
+      hook_type: "PreToolUse",
+      data: { session_id: sid, tool_name: "Bash" },
+    });
+    await post("/api/hooks/event", {
+      hook_type: "PermissionRequest",
+      data: { session_id: sid, tool_name: "Bash" },
+    });
+    const subX = { agent_id: "subx2", agent_type: "favie-executor" };
+    await post("/api/hooks/event", {
+      hook_type: "PreToolUse",
+      data: { session_id: sid, tool_name: "Write", ...subX },
+    });
+    await post("/api/hooks/event", {
+      hook_type: "PermissionRequest",
+      data: { session_id: sid, tool_name: "Write", ...subX },
+    });
+    await post("/api/hooks/event", {
+      hook_type: "PostToolUse",
+      data: { session_id: sid, tool_name: "Write", ...subX },
+    });
+    const mid = await fetch(`/api/sessions/${sid}`);
+    assert.ok(mid.body.session.awaiting_input_since, "main's dialog is still open");
+
+    await post("/api/hooks/event", {
+      hook_type: "PostToolUse",
+      data: { session_id: sid, tool_name: "Bash" },
+    });
+    const after = await fetch(`/api/sessions/${sid}`);
+    assert.equal(after.body.session.awaiting_input_since, null);
+  });
+
   it("should clear awaiting_input_since when the user resumes (next PreToolUse)", async () => {
     // Re-arm the waiting state — previous test may have left it set, but be
     // explicit so this test stands on its own.

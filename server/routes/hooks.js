@@ -72,7 +72,51 @@ function setAwaiting(sessionId, mainAgentId, ts, reason) {
   if (mainAgentId) stmts.setAgentAwaiting.run(ts, reason, reason, mainAgentId);
 }
 
+// fleet-monitor: which agents of a session still have a permission dialog
+// open. Claude Code stamps `agent_id` (+ `agent_type`) on every hook payload
+// emitted from INSIDE a subagent; main-thread payloads carry none, so the key
+// is "main" or the subagent's Claude-side agent_id. A background subagent keeps
+// issuing PreToolUse/PostToolUse while the main thread sits blocked on its
+// permission prompt — those events say nothing about the human, so they must
+// not clear 等待中. Only the agent whose dialog was open (its next tool event
+// means the dialog was answered) may clear it, and only when no other dialog
+// is still pending. In-memory on purpose: after a restart it is empty, which
+// degrades to "only main-thread events clear" — never to a false 活跃.
+const pendingPermissions = new Map(); // sessionId -> Set<agentKey>
+
+function hookAgentKeyOf(data) {
+  return typeof data.agent_id === "string" && data.agent_id !== "" ? data.agent_id : "main";
+}
+
+function notePendingPermission(sessionId, key) {
+  let set = pendingPermissions.get(sessionId);
+  if (!set) {
+    set = new Set();
+    pendingPermissions.set(sessionId, set);
+  }
+  set.add(key);
+}
+
+function forgetPendingPermission(sessionId, key) {
+  const set = pendingPermissions.get(sessionId);
+  if (!set) return false;
+  const had = set.delete(key);
+  if (set.size === 0) pendingPermissions.delete(sessionId);
+  return had;
+}
+
+// Does a tool event from `key` prove the user has acted (→ clear awaiting)?
+//   main thread → yes, unless another agent's dialog is still open
+//   subagent    → only if ITS dialog was open, and it was the last one
+function toolEventResolvesAwaiting(sessionId, key) {
+  const had = forgetPendingPermission(sessionId, key);
+  const stillPending = pendingPermissions.has(sessionId);
+  if (key === "main") return !stillPending;
+  return had && !stillPending;
+}
+
 function clearAwaitingInput(sessionId, mainAgentId, broadcastUpdates) {
+  pendingPermissions.delete(sessionId);
   // Clear waiting flag on the main agent and any other agents on this session
   // (subagents don't normally enter waiting state, but keep them in sync just
   // in case a future notification path stamps one).
@@ -326,6 +370,11 @@ const processEvent = db.transaction((hookType, data) => {
   let mainAgent = getMainAgent(sessionId);
   const mainAgentId = mainAgent?.id ?? null;
 
+  // fleet-monitor: "main" or the Claude-side agent_id of the subagent that
+  // emitted this hook (see pendingPermissions above).
+  const hookAgentKey = hookAgentKeyOf(data);
+  const fromSubagent = hookAgentKey !== "main";
+
   // Reactivate non-active sessions when we receive hook events proving the session is alive.
   // - UserPromptSubmit and PreToolUse always reactivate (user actively retried, even from error).
   // - Other work events (PostToolUse, Notification, SessionStart) reactivate non-error sessions.
@@ -376,10 +425,15 @@ const processEvent = db.transaction((hookType, data) => {
     case "PreToolUse": {
       summary = `Using tool: ${toolName}`;
 
-      // PreToolUse means Claude is actively running a tool, ergo the user
-      // has resumed (Stop only fires at end of turn — Claude can't start a
-      // new tool call without fresh user input). Clear waiting now.
-      clearAwaitingInput(sessionId, mainAgentId, true);
+      // PreToolUse from the MAIN thread means Claude is actively running a
+      // tool, ergo the user has resumed (Stop only fires at end of turn —
+      // Claude can't start a new tool call without fresh user input). A
+      // subagent's PreToolUse proves nothing about the human (background
+      // agents keep working while main is blocked on a permission prompt) —
+      // unless it is the subagent whose own dialog was just answered.
+      if (toolEventResolvesAwaiting(sessionId, hookAgentKey)) {
+        clearAwaitingInput(sessionId, mainAgentId, true);
+      }
 
       // If the tool is Agent, a subagent is being created
       if (toolName === "Agent") {
@@ -401,7 +455,7 @@ const processEvent = db.transaction((hookType, data) => {
         //     working subagent (most recently nested active agent).
         //   - Fallback to main if nothing else matches.
         let parentId = mainAgentId;
-        if (mainAgent && mainAgent.status !== "working") {
+        if (fromSubagent || (mainAgent && mainAgent.status !== "working")) {
           const deepest = stmts.findDeepestWorkingAgent.get(sessionId, sessionId);
           if (deepest) {
             parentId = deepest.id;
@@ -431,12 +485,14 @@ const processEvent = db.transaction((hookType, data) => {
       //
       // Heuristic: main is waiting + working subagents exist → subagent is the actor.
       //            main is working/waiting with no subagents → main is the actor.
+      // fleet-monitor: a payload carrying agent_id is a subagent's for sure —
+      // never promote main / never overwrite main's current_tool with it.
       const deepestWorking =
-        mainAgent && mainAgent.status === "waiting"
+        fromSubagent || (mainAgent && mainAgent.status === "waiting")
           ? stmts.findDeepestWorkingAgent.get(sessionId, sessionId)
           : null;
-      const subagentIsActor = !!deepestWorking;
-      if (subagentIsActor && toolName !== "Agent") {
+      const subagentIsActor = fromSubagent || !!deepestWorking;
+      if (deepestWorking && subagentIsActor && toolName !== "Agent") {
         agentId = deepestWorking.id;
       }
       if (
@@ -458,14 +514,18 @@ const processEvent = db.transaction((hookType, data) => {
       // Code prompts the user mid-tool). The Notification stamps waiting,
       // the user approves, the tool completes, PostToolUse arrives. Without
       // a clear here, we'd be stuck in waiting until the next PreToolUse.
-      clearAwaitingInput(sessionId, mainAgentId, true);
+      // Same subagent rule as PreToolUse: a background subagent finishing a
+      // tool must not clear a dialog that belongs to another agent.
+      if (toolEventResolvesAwaiting(sessionId, hookAgentKey)) {
+        clearAwaitingInput(sessionId, mainAgentId, true);
+      }
 
       // NOTE: PostToolUse for "Agent" tool fires immediately when a subagent is
       // backgrounded — it does NOT mean the subagent finished its work.
       // Subagent completion is handled by SubagentStop, not here.
 
       // Attribute to the working subagent when main is waiting (same heuristic as PreToolUse).
-      if (mainAgent && mainAgent.status === "waiting" && toolName !== "Agent") {
+      if ((fromSubagent || (mainAgent && mainAgent.status === "waiting")) && toolName !== "Agent") {
         const deepest = stmts.findDeepestWorkingAgent.get(sessionId, sessionId);
         if (deepest) {
           agentId = deepest.id;
@@ -473,8 +533,9 @@ const processEvent = db.transaction((hookType, data) => {
       }
 
       // Only clear current_tool on the main agent if it's actively working.
-      // Skip if waiting (waiting for subagents) or already completed.
-      if (mainAgent && mainAgent.status === "working") {
+      // Skip if waiting (waiting for subagents) or already completed — and
+      // skip for a subagent's event, which says nothing about main's tool.
+      if (!fromSubagent && mainAgent && mainAgent.status === "working") {
         stmts.updateAgent.run(null, null, null, null, null, null, mainAgentId);
         broadcast("agent_updated", stmts.getAgent.get(mainAgentId));
       }
@@ -531,6 +592,11 @@ const processEvent = db.transaction((hookType, data) => {
 
     case "SubagentStop": {
       summary = `Subagent completed`;
+      // A subagent that ends can no longer have a dialog open (e.g. the user
+      // pressed Esc on its prompt and the agent was torn down) — drop its key
+      // so it can't pin 等待中 forever. Awaiting itself is left alone: this
+      // event says nothing about whether the human is back.
+      if (fromSubagent) forgetPendingPermission(sessionId, hookAgentKey);
       const subagents = stmts.listAgentsBySession.all(sessionId);
       let matchingSub = null;
 
@@ -715,8 +781,11 @@ const processEvent = db.transaction((hookType, data) => {
       // approved) or the next user action. (A silent, exit-0 observer hook does
       // NOT auto-approve — the user still gets the normal prompt.)
       const tool = data.tool_name || toolName || "a tool";
-      summary = `Permission requested: ${tool}`;
+      summary = fromSubagent
+        ? `Permission requested: ${tool} (subagent ${data.agent_type || hookAgentKey})`
+        : `Permission requested: ${tool}`;
       awaitingReason = "action";
+      notePendingPermission(sessionId, hookAgentKey);
       setAwaiting(sessionId, mainAgentId, new Date().toISOString(), "action");
       broadcast("session_updated", stmts.getSession.get(sessionId));
       if (mainAgentId) {

@@ -57,12 +57,33 @@ focused-terminal permission prompt — so machines must also register a
 notification and the broadcast both gate on the server-computed `awaiting_reason`
 (no client-side re-classification).
 
+**Subagent hook events must not clear it.** Claude Code stamps `agent_id`
+(+ `agent_type`) on every hook payload emitted from inside a subagent
+(PreToolUse / PostToolUse / PermissionRequest / SubagentStop of an Agent-tool
+child); main-thread payloads carry neither. A backgrounded subagent keeps
+issuing tool calls while the main thread sits blocked on a permission prompt, and
+upstream's blanket "any PreToolUse/PostToolUse clears awaiting" turned that into
+a false 活跃 within seconds of the dialog appearing (seen 2026-09-03: main blocked
+on Bash, a `favie-executor` subagent editing files). `server/routes/hooks.js`
+now keeps an in-memory per-session set of agents with an open dialog
+(`pendingPermissions`, keyed `"main"` or the subagent's `agent_id`, filled by
+`PermissionRequest`): a main-thread tool event clears 等待中 unless another
+agent's dialog is still open; a subagent's tool event clears it only when *its
+own* dialog was the last one open. `SubagentStop` drops the ending agent's key
+so a torn-down subagent cannot pin 等待中. Subagent events also no longer promote
+the main agent to `working` or overwrite its `current_tool`. In-memory by design:
+after a restart the set is empty, which degrades to "only main-thread events
+clear" — never to a false 活跃.
+
 Touched:
 - `client/src/lib/types.ts` — `effectiveAgentStatus` / `effectiveSessionStatus`,
   `IDLE_STATUS`, `STATUS_CONFIG` / `SESSION_STATUS_CONFIG` colors.
 - `client/src/components/{StatusBadge,SessionCard,AgentCard}.tsx`,
   `client/src/pages/KanbanBoard.tsx` — columns `等待中 → 活跃 → 空闲中 → 完成 →
   错误 → 废弃`.
+- `server/routes/hooks.js` — `pendingPermissions` / `toolEventResolvesAwaiting`
+  (subagent-originated hook events, see above); regression tests in
+  `server/__tests__/api.test.js` ("keeps 等待中 while a background subagent…").
 - `server/lib/alerts.js` — stuck-agent match uses the **effective** status via a
   SQL CASE (so `AGENT_STATUSES` includes `idle`), keeping alerts in lockstep with
   the UI — no front/back divergence.
